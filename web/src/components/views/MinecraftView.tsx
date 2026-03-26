@@ -316,7 +316,7 @@ export default function MinecraftView({
   const keysRef = useRef<Set<string>>(new Set());
   const yawRef = useRef(0);
   const pitchRef = useRef(0);
-  const playerPosRef = useRef(new THREE.Vector3(WORLD_SIZE / 2, 12, WORLD_SIZE / 2));
+  const playerPosRef = useRef(new THREE.Vector3(WORLD_SIZE / 2, 20, WORLD_SIZE / 2));
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const onGroundRef = useRef(false);
   const selectedSlotRef = useRef(0);
@@ -420,7 +420,12 @@ export default function MinecraftView({
 
     // ── Keys ────────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
-      keysRef.current.add(e.key.toLowerCase());
+      const k = e.key.toLowerCase();
+      keysRef.current.add(k);
+      // Prevent page scroll on WASD/space when locked
+      if (document.pointerLockElement === canvas) {
+        if (['w', 'a', 's', 'd', ' ', 'shift'].includes(k)) e.preventDefault();
+      }
       // Hotbar selection with number keys
       const num = parseInt(e.key);
       if (num >= 1 && num <= HOTBAR_BLOCKS.length) {
@@ -428,8 +433,8 @@ export default function MinecraftView({
       }
     };
     const onKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     // ── Scroll wheel to cycle hotbar ────────────────────────────────
     const onWheel = (e: WheelEvent) => {
@@ -644,8 +649,8 @@ export default function MinecraftView({
       cancelAnimationFrame(state.animId);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('click', requestLock);
       canvas.removeEventListener('mousedown', onMouseDown);

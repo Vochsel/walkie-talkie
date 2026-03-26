@@ -4,71 +4,51 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-const TILE = 32;
+// ── Constants ───────────────────────────────────────────────────────
+const BASE_TILE = 32;
 const WORLD_W = 40;
 const WORLD_H = 40;
-const PLAYER_SPEED = 4; // tiles per second
-const INTERACT_RANGE = 1.5; // tiles
+const MOVE_DURATION = 0.12; // seconds per tile move
+const INTERACT_RANGE = 1.5;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.15;
 
-// ── Tile types ─────────────────────────────────────────────────────────────────
-
+// ── Tile types ──────────────────────────────────────────────────────
 const TileType = {
-  Grass: 0,
-  GrassDark: 1,
-  GrassLight: 2,
-  Dirt: 3,
-  Water: 4,
-  Tree: 5,
-  Rock: 6,
+  Grass: 0, GrassDark: 1, GrassLight: 2, Dirt: 3,
+  Water: 4, Tree: 5, Rock: 6,
 } as const;
 type TileType = (typeof TileType)[keyof typeof TileType];
 
 const WALKABLE: Set<TileType> = new Set([TileType.Grass, TileType.GrassDark, TileType.GrassLight, TileType.Dirt]);
 
-// ── Seeded random for deterministic world ──────────────────────────────────────
-
+// ── Seeded random ───────────────────────────────────────────────────
 function mulberry32(seed: number) {
   return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-// Simple value noise
 function generateNoise(w: number, h: number, rng: () => number): number[][] {
-  const grid: number[][] = [];
-  for (let y = 0; y < h; y++) {
-    grid[y] = [];
-    for (let x = 0; x < w; x++) {
-      grid[y][x] = rng();
-    }
-  }
-  return grid;
+  const g: number[][] = [];
+  for (let y = 0; y < h; y++) { g[y] = []; for (let x = 0; x < w; x++) g[y][x] = rng(); }
+  return g;
 }
 
 function smoothNoise(noise: number[][], x: number, y: number): number {
-  const h = noise.length;
-  const w = noise[0].length;
-  let sum = 0;
-  let count = 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const ny = ((y + dy) % h + h) % h;
-      const nx = ((x + dx) % w + w) % w;
-      sum += noise[ny][nx];
-      count++;
-    }
+  const h = noise.length, w = noise[0].length;
+  let sum = 0, count = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    sum += noise[((y + dy) % h + h) % h][((x + dx) % w + w) % w]; count++;
   }
   return sum / count;
 }
 
-// ── World generation ───────────────────────────────────────────────────────────
-
+// ── World gen ───────────────────────────────────────────────────────
 function generateWorld(): TileType[][] {
   const rng = mulberry32(42);
   const noise1 = generateNoise(WORLD_W, WORLD_H, rng);
@@ -80,58 +60,35 @@ function generateWorld(): TileType[][] {
     for (let x = 0; x < WORLD_W; x++) {
       const val = smoothNoise(noise1, x, y);
       const detail = smoothNoise(noise2, x, y);
-
-      if (val < 0.25) {
-        world[y][x] = TileType.Water;
-      } else if (val < 0.35) {
-        world[y][x] = TileType.Dirt;
-      } else if (detail < 0.3) {
-        world[y][x] = TileType.GrassDark;
-      } else if (detail > 0.65) {
-        world[y][x] = TileType.GrassLight;
-      } else {
-        world[y][x] = TileType.Grass;
-      }
+      if (val < 0.25) world[y][x] = TileType.Water;
+      else if (val < 0.35) world[y][x] = TileType.Dirt;
+      else if (detail < 0.3) world[y][x] = TileType.GrassDark;
+      else if (detail > 0.65) world[y][x] = TileType.GrassLight;
+      else world[y][x] = TileType.Grass;
     }
   }
 
-  // Scatter trees and rocks on grass
-  for (let y = 2; y < WORLD_H - 2; y++) {
-    for (let x = 2; x < WORLD_W - 2; x++) {
-      if (world[y][x] === TileType.Grass || world[y][x] === TileType.GrassDark || world[y][x] === TileType.GrassLight) {
-        const r = rng();
-        if (r < 0.06) {
-          world[y][x] = TileType.Tree;
-        } else if (r < 0.09) {
-          world[y][x] = TileType.Rock;
-        }
-      }
+  for (let y = 2; y < WORLD_H - 2; y++) for (let x = 2; x < WORLD_W - 2; x++) {
+    if (WALKABLE.has(world[y][x])) {
+      const r = rng();
+      if (r < 0.06) world[y][x] = TileType.Tree;
+      else if (r < 0.09) world[y][x] = TileType.Rock;
     }
   }
 
-  // Clear a starting area around center
-  const cx = Math.floor(WORLD_W / 2);
-  const cy = Math.floor(WORLD_H / 2);
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const ty = cy + dy;
-      const tx = cx + dx;
-      if (ty >= 0 && ty < WORLD_H && tx >= 0 && tx < WORLD_W) {
-        world[ty][tx] = TileType.Grass;
-      }
-    }
+  // Clear start area
+  const cx = Math.floor(WORLD_W / 2), cy = Math.floor(WORLD_H / 2);
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const ty = cy + dy, tx = cx + dx;
+    if (ty >= 0 && ty < WORLD_H && tx >= 0 && tx < WORLD_W) world[ty][tx] = TileType.Grass;
   }
 
-  // Cut some dirt paths
-  let px = cx;
-  let py = cy;
+  // Paths
+  let px = cx, py = cy;
   for (let i = 0; i < 60; i++) {
     world[py][px] = TileType.Dirt;
-    if (rng() < 0.5) {
-      px += rng() < 0.5 ? -1 : 1;
-    } else {
-      py += rng() < 0.5 ? -1 : 1;
-    }
+    if (rng() < 0.5) px += rng() < 0.5 ? -1 : 1;
+    else py += rng() < 0.5 ? -1 : 1;
     px = Math.max(1, Math.min(WORLD_W - 2, px));
     py = Math.max(1, Math.min(WORLD_H - 2, py));
   }
@@ -139,78 +96,107 @@ function generateWorld(): TileType[][] {
   return world;
 }
 
-// ── Tile colors ────────────────────────────────────────────────────────────────
-
 function tileColor(t: TileType): string {
   switch (t) {
-    case TileType.Grass:
-      return '#4a7c3f';
-    case TileType.GrassDark:
-      return '#3b6832';
-    case TileType.GrassLight:
-      return '#5e9b4f';
-    case TileType.Dirt:
-      return '#8b7355';
-    case TileType.Water:
-      return '#2a6fa8';
-    case TileType.Tree:
-      return '#2d5a1e';
-    case TileType.Rock:
-      return '#6b6b6b';
-    default:
-      return '#4a7c3f';
+    case TileType.Grass: return '#4a7c3f';
+    case TileType.GrassDark: return '#3b6832';
+    case TileType.GrassLight: return '#5e9b4f';
+    case TileType.Dirt: return '#8b7355';
+    case TileType.Water: return '#2a6fa8';
+    case TileType.Tree: return '#2d5a1e';
+    case TileType.Rock: return '#6b6b6b';
+    default: return '#4a7c3f';
   }
 }
 
-// ── Direction enum ─────────────────────────────────────────────────────────────
-
 type Dir = 'up' | 'down' | 'left' | 'right';
 
-// ── Station type ───────────────────────────────────────────────────────────────
+interface Station { tileX: number; tileY: number; }
 
-interface Station {
-  tileX: number;
-  tileY: number;
-}
-
-// ── Component ──────────────────────────────────────────────────────────────────
-
+// ── Component ───────────────────────────────────────────────────────
 export default function RpgView({
-  terminals,
-  activeTerminalId,
-  setActiveTerminalId,
-  sendInput,
-  resizeTerminal,
-  killTerminal,
-  createTerminal,
-  registerOutputHandler,
+  terminals, activeTerminalId, setActiveTerminalId,
+  sendInput, resizeTerminal, killTerminal, createTerminal, registerOutputHandler,
 }: ViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<TileType[][] | null>(null);
   const stationsRef = useRef<Map<string, Station>>(new Map());
-  const playerRef = useRef({ x: WORLD_W / 2, y: WORLD_H / 2, dir: 'down' as Dir });
-  const animPlayerRef = useRef({ x: WORLD_W / 2, y: WORLD_H / 2 });
+
+  // Tile-based player: integer grid position + animation
+  const playerTileRef = useRef({ x: Math.floor(WORLD_W / 2), y: Math.floor(WORLD_H / 2) });
+  const playerAnimRef = useRef({ x: WORLD_W / 2, y: WORLD_H / 2 });
+  const playerDirRef = useRef<Dir>('down');
+  const moveQueueRef = useRef<Dir | null>(null);
+  const isMovingRef = useRef(false);
+  const moveProgressRef = useRef(0);
+  const moveFromRef = useRef({ x: 0, y: 0 });
+
   const keysRef = useRef<Set<string>>(new Set());
-  const animFrameRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(0);
-  const pulseRef = useRef<number>(0);
+  const animFrameRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const zoomRef = useRef(1.5);
+  const nearbyStationRef = useRef<string | null>(null);
+  const pendingPlacementRef = useRef<{ x: number; y: number } | null>(null);
+  const hoverTileRef = useRef<{ x: number; y: number } | null>(null);
 
   const [openTerminalId, setOpenTerminalId] = useState<string | null>(null);
-  const nearbyStationRef = useRef<string | null>(null);
+  const [zoom, setZoom] = useState(1.5);
 
-  // Generate world once
-  if (!worldRef.current) {
-    worldRef.current = generateWorld();
-  }
+  if (!worldRef.current) worldRef.current = generateWorld();
 
-  // ── Place stations for terminals ───────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────
+  const isWalkable = useCallback((tx: number, ty: number): boolean => {
+    if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return false;
+    return WALKABLE.has(worldRef.current![ty][tx]);
+  }, []);
 
+  const isStationAt = useCallback((tx: number, ty: number): string | null => {
+    for (const [id, s] of stationsRef.current) {
+      if (s.tileX === tx && s.tileY === ty) return id;
+    }
+    return null;
+  }, []);
+
+  const findNearbyStation = useCallback((): string | null => {
+    const p = playerTileRef.current;
+    let closest: string | null = null, best = Infinity;
+    stationsRef.current.forEach((s, id) => {
+      const d = Math.abs(s.tileX - p.x) + Math.abs(s.tileY - p.y);
+      if (d <= INTERACT_RANGE && d < best) { best = d; closest = id; }
+    });
+    return closest;
+  }, []);
+
+  // ── Tile-based movement ───────────────────────────────────────────
+  const tryMove = useCallback((dir: Dir) => {
+    if (isMovingRef.current) { moveQueueRef.current = dir; return; }
+
+    const p = playerTileRef.current;
+    let nx = p.x, ny = p.y;
+    if (dir === 'up') ny--;
+    else if (dir === 'down') ny++;
+    else if (dir === 'left') nx--;
+    else if (dir === 'right') nx++;
+
+    playerDirRef.current = dir;
+
+    // Check if blocked by wall or station
+    if (!isWalkable(nx, ny) || isStationAt(nx, ny)) return;
+
+    // Start move
+    moveFromRef.current = { x: p.x, y: p.y };
+    playerTileRef.current = { x: nx, y: ny };
+    isMovingRef.current = true;
+    moveProgressRef.current = 0;
+  }, [isWalkable, isStationAt]);
+
+  // ── Place terminals ───────────────────────────────────────────────
   const placeStation = useCallback((terminalId: string, tx: number, ty: number) => {
     stationsRef.current.set(terminalId, { tileX: tx, tileY: ty });
   }, []);
 
-  // Auto-place new terminals that don't have stations yet
+  // Sync terminals
   useEffect(() => {
     const world = worldRef.current;
     if (!world) return;
@@ -218,178 +204,115 @@ export default function RpgView({
 
     for (const term of terminals) {
       if (!stationsRef.current.has(term.id)) {
-        // Find a walkable tile near center
-        let placed = false;
-        for (let attempt = 0; attempt < 200; attempt++) {
-          const tx = Math.floor(rng() * WORLD_W);
-          const ty = Math.floor(rng() * WORLD_H);
-          if (WALKABLE.has(world[ty][tx])) {
-            // Check not too close to another station
-            let tooClose = false;
-            stationsRef.current.forEach((s) => {
-              if (Math.abs(s.tileX - tx) + Math.abs(s.tileY - ty) < 3) tooClose = true;
-            });
-            if (!tooClose) {
+        if (pendingPlacementRef.current) {
+          placeStation(term.id, pendingPlacementRef.current.x, pendingPlacementRef.current.y);
+          pendingPlacementRef.current = null;
+        } else {
+          for (let attempt = 0; attempt < 200; attempt++) {
+            const tx = Math.floor(rng() * WORLD_W), ty = Math.floor(rng() * WORLD_H);
+            if (WALKABLE.has(world[ty][tx]) && !isStationAt(tx, ty)) {
               placeStation(term.id, tx, ty);
-              placed = true;
               break;
             }
           }
         }
-        if (!placed) {
-          // Fallback: place near player
-          const p = playerRef.current;
-          placeStation(term.id, Math.floor(p.x) + 2, Math.floor(p.y) + 2);
-        }
       }
     }
+    const ids = new Set(terminals.map(t => t.id));
+    stationsRef.current.forEach((_, id) => { if (!ids.has(id)) stationsRef.current.delete(id); });
+  }, [terminals, placeStation, isStationAt]);
 
-    // Remove stations for dead terminals
-    const termIds = new Set(terminals.map((t) => t.id));
-    stationsRef.current.forEach((_, id) => {
-      if (!termIds.has(id)) stationsRef.current.delete(id);
-    });
-  }, [terminals, placeStation]);
-
-  // ── Check if tile is walkable (including stations as walkable) ─────────────
-
-  const isWalkable = useCallback((tx: number, ty: number): boolean => {
-    if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return false;
-    const world = worldRef.current;
-    if (!world) return false;
-    return WALKABLE.has(world[ty][tx]);
-  }, []);
-
-  // ── Find closest station within range ──────────────────────────────────────
-
-  const findNearbyStation = useCallback((): string | null => {
-    const p = playerRef.current;
-    let closest: string | null = null;
-    let closestDist = Infinity;
-    stationsRef.current.forEach((s, id) => {
-      const dx = s.tileX + 0.5 - p.x;
-      const dy = s.tileY + 0.5 - p.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < INTERACT_RANGE && dist < closestDist) {
-        closestDist = dist;
-        closest = id;
-      }
-    });
-    return closest;
-  }, []);
-
-  // ── Place terminal at player position ──────────────────────────────────────
-
-  const handlePlaceTerminal = useCallback(() => {
-    const p = playerRef.current;
-    const tx = Math.round(p.x);
-    const ty = Math.round(p.y) - 1; // Place one tile in front (up)
-    const clampedX = Math.max(0, Math.min(WORLD_W - 1, tx));
-    const clampedY = Math.max(0, Math.min(WORLD_H - 1, ty));
-
-    // Check the target tile is walkable
-    if (!isWalkable(clampedX, clampedY)) return;
-
-    // Check no station already there
-    let occupied = false;
-    stationsRef.current.forEach((s) => {
-      if (s.tileX === clampedX && s.tileY === clampedY) occupied = true;
-    });
-    if (occupied) return;
-
-    // Create a terminal — the station will be placed in the useEffect above
-    // We'll temporarily stash the desired position so the effect can use it
-    pendingPlacementRef.current = { x: clampedX, y: clampedY };
-    createTerminal(80, 24);
-  }, [createTerminal, isWalkable]);
-
-  const pendingPlacementRef = useRef<{ x: number; y: number } | null>(null);
-
-  // When a new terminal appears and we have a pending placement, place it there
+  // ── Keyboard ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (pendingPlacementRef.current && terminals.length > 0) {
-      const newest = terminals[terminals.length - 1];
-      if (!stationsRef.current.has(newest.id)) {
-        placeStation(newest.id, pendingPlacementRef.current.x, pendingPlacementRef.current.y);
-        pendingPlacementRef.current = null;
-      }
-    }
-  }, [terminals, placeStation]);
-
-  // ── Keyboard handling ──────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture when terminal popup is open
+    const down = (e: KeyboardEvent) => {
       if (openTerminalId) return;
-
-      const key = e.key.toLowerCase();
-      keysRef.current.add(key);
-
-      if (key === 'e') {
+      const k = e.key.toLowerCase();
+      keysRef.current.add(k);
+      if (k === 'e') {
         const nearby = findNearbyStation();
-        if (nearby) {
-          setOpenTerminalId(nearby);
-          setActiveTerminalId(nearby);
-        }
-      }
-      if (key === 't') {
-        handlePlaceTerminal();
+        if (nearby) { setOpenTerminalId(nearby); setActiveTerminalId(nearby); }
       }
     };
+    const up = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, [openTerminalId, findNearbyStation, setActiveTerminalId]);
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keysRef.current.delete(e.key.toLowerCase());
+  // ── Zoom (scroll wheel) ───────────────────────────────────────────
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      const nz = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current + dir));
+      zoomRef.current = nz;
+      setZoom(nz);
     };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [openTerminalId, findNearbyStation, handlePlaceTerminal, setActiveTerminalId]);
-
-  // ── Canvas click handler ───────────────────────────────────────────────────
-
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas || openTerminalId) return;
-
+  // ── Mouse move for hover tile ─────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const TILE = BASE_TILE * zoomRef.current;
+      const anim = playerAnimRef.current;
+      const camX = anim.x * TILE - canvas.width / 2;
+      const camY = anim.y * TILE - canvas.height / 2;
+      const tx = Math.floor((mx + camX) / TILE), ty = Math.floor((my + camY) / TILE);
+      if (tx >= 0 && tx < WORLD_W && ty >= 0 && ty < WORLD_H) {
+        hoverTileRef.current = { x: tx, y: ty };
+      } else {
+        hoverTileRef.current = null;
+      }
+    };
+    canvas.addEventListener('mousemove', onMove);
+    return () => canvas.removeEventListener('mousemove', onMove);
+  }, []);
 
-      // Convert screen coords to world coords
-      const anim = animPlayerRef.current;
-      const cw = canvas.width;
-      const ch = canvas.height;
-      const camX = anim.x * TILE - cw / 2 + TILE / 2;
-      const camY = anim.y * TILE - ch / 2 + TILE / 2;
-      const worldX = (mx + camX) / TILE;
-      const worldY = (my + camY) / TILE;
+  // ── Canvas click: interact station or place terminal ──────────────
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || openTerminalId) return;
 
-      // Check if clicked on a station
-      stationsRef.current.forEach((s, id) => {
-        if (worldX >= s.tileX && worldX < s.tileX + 1 && worldY >= s.tileY && worldY < s.tileY + 1) {
-          // Check range
-          const p = playerRef.current;
-          const dx = s.tileX + 0.5 - p.x;
-          const dy = s.tileY + 0.5 - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < INTERACT_RANGE + 1) {
-            setOpenTerminalId(id);
-            setActiveTerminalId(id);
-          }
-        }
-      });
-    },
-    [openTerminalId, setActiveTerminalId]
-  );
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const TILE = BASE_TILE * zoomRef.current;
+    const anim = playerAnimRef.current;
+    const camX = anim.x * TILE - canvas.width / 2;
+    const camY = anim.y * TILE - canvas.height / 2;
+    const tx = Math.floor((mx + camX) / TILE), ty = Math.floor((my + camY) / TILE);
 
-  // ── Game loop ──────────────────────────────────────────────────────────────
+    if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return;
 
+    // Click on station? Interact if close enough
+    const stationId = isStationAt(tx, ty);
+    if (stationId) {
+      const p = playerTileRef.current;
+      const d = Math.abs(tx - p.x) + Math.abs(ty - p.y);
+      if (d <= INTERACT_RANGE + 1) {
+        setOpenTerminalId(stationId);
+        setActiveTerminalId(stationId);
+      }
+      return;
+    }
+
+    // Click on walkable tile with no station? Place terminal
+    if (!isWalkable(tx, ty)) return;
+    const p = playerTileRef.current;
+    if (tx === p.x && ty === p.y) return; // don't place on self
+
+    pendingPlacementRef.current = { x: tx, y: ty };
+    createTerminal(80, 24);
+  }, [openTerminalId, isStationAt, isWalkable, setActiveTerminalId, createTerminal]);
+
+  // ── Game loop ─────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -397,425 +320,292 @@ export default function RpgView({
     if (!ctx) return;
 
     const resize = () => {
-      const parent = containerRef.current;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientHeight;
+      const p = containerRef.current;
+      if (!p) return;
+      canvas.width = p.clientWidth;
+      canvas.height = p.clientHeight;
     };
-
     resize();
-    const observer = new ResizeObserver(resize);
-    if (containerRef.current) observer.observe(containerRef.current);
+    const obs = new ResizeObserver(resize);
+    if (containerRef.current) obs.observe(containerRef.current);
 
     lastTimeRef.current = performance.now();
 
     const loop = (time: number) => {
       const dt = Math.min((time - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = time;
-      pulseRef.current = time;
 
-      // ── Update ─────────────────────────────────────────────────────────
+      const TILE = BASE_TILE * zoomRef.current;
+      const cw = canvas.width, ch = canvas.height;
+      const world = worldRef.current!;
 
-      const keys = keysRef.current;
-      const player = playerRef.current;
-      let dx = 0;
-      let dy = 0;
-
+      // ── Movement input ────────────────────────────────────────────
       if (!openTerminalId) {
-        if (keys.has('w') || keys.has('arrowup')) dy -= 1;
-        if (keys.has('s') || keys.has('arrowdown')) dy += 1;
-        if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
-        if (keys.has('d') || keys.has('arrowright')) dx += 1;
+        const keys = keysRef.current;
+        let dir: Dir | null = null;
+        if (keys.has('w') || keys.has('arrowup')) dir = 'up';
+        else if (keys.has('s') || keys.has('arrowdown')) dir = 'down';
+        else if (keys.has('a') || keys.has('arrowleft')) dir = 'left';
+        else if (keys.has('d') || keys.has('arrowright')) dir = 'right';
+
+        if (dir) tryMove(dir);
       }
 
-      if (dx !== 0 || dy !== 0) {
-        // Normalize diagonal
-        const len = Math.sqrt(dx * dx + dy * dy);
-        dx /= len;
-        dy /= len;
-
-        const speed = PLAYER_SPEED * dt;
-        const newX = player.x + dx * speed;
-        const newY = player.y + dy * speed;
-
-        // Collision: check the tile the player center would be in
-        // Use a smaller hitbox (0.3 radius from center)
-        const r = 0.3;
-        const canMoveX =
-          isWalkable(Math.floor(newX - r), Math.floor(player.y - r)) &&
-          isWalkable(Math.floor(newX + r), Math.floor(player.y - r)) &&
-          isWalkable(Math.floor(newX - r), Math.floor(player.y + r)) &&
-          isWalkable(Math.floor(newX + r), Math.floor(player.y + r));
-
-        const canMoveY =
-          isWalkable(Math.floor(player.x - r), Math.floor(newY - r)) &&
-          isWalkable(Math.floor(player.x + r), Math.floor(newY - r)) &&
-          isWalkable(Math.floor(player.x - r), Math.floor(newY + r)) &&
-          isWalkable(Math.floor(player.x + r), Math.floor(newY + r));
-
-        if (canMoveX) player.x = newX;
-        if (canMoveY) player.y = newY;
-
-        // Clamp to world
-        player.x = Math.max(0.5, Math.min(WORLD_W - 0.5, player.x));
-        player.y = Math.max(0.5, Math.min(WORLD_H - 0.5, player.y));
-
-        // Update direction
-        if (Math.abs(dx) > Math.abs(dy)) {
-          player.dir = dx > 0 ? 'right' : 'left';
+      // ── Animate move ──────────────────────────────────────────────
+      if (isMovingRef.current) {
+        moveProgressRef.current += dt / MOVE_DURATION;
+        if (moveProgressRef.current >= 1) {
+          moveProgressRef.current = 1;
+          isMovingRef.current = false;
+          playerAnimRef.current = {
+            x: playerTileRef.current.x + 0.5,
+            y: playerTileRef.current.y + 0.5,
+          };
+          // Process queued move
+          if (moveQueueRef.current) {
+            const q = moveQueueRef.current;
+            moveQueueRef.current = null;
+            tryMove(q);
+          }
         } else {
-          player.dir = dy > 0 ? 'down' : 'up';
+          const t = moveProgressRef.current;
+          // Smooth step
+          const s = t * t * (3 - 2 * t);
+          playerAnimRef.current = {
+            x: moveFromRef.current.x + 0.5 + (playerTileRef.current.x - moveFromRef.current.x) * s,
+            y: moveFromRef.current.y + 0.5 + (playerTileRef.current.y - moveFromRef.current.y) * s,
+          };
         }
       }
 
-      // Smooth camera interpolation
-      const anim = animPlayerRef.current;
-      const lerpSpeed = 8;
-      anim.x += (player.x - anim.x) * Math.min(1, lerpSpeed * dt);
-      anim.y += (player.y - anim.y) * Math.min(1, lerpSpeed * dt);
-
-      // Update nearby station indicator (ref only, no re-render)
       nearbyStationRef.current = findNearbyStation();
 
-      // ── Render ─────────────────────────────────────────────────────────
+      // ── Camera ────────────────────────────────────────────────────
+      const anim = playerAnimRef.current;
+      const camX = anim.x * TILE - cw / 2;
+      const camY = anim.y * TILE - ch / 2;
 
-      const cw = canvas.width;
-      const ch = canvas.height;
-      const camX = anim.x * TILE - cw / 2 + TILE / 2;
-      const camY = anim.y * TILE - ch / 2 + TILE / 2;
-
-      // Dark background
+      // Clear
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, cw, ch);
 
-      const world = worldRef.current;
-      if (!world) {
-        animFrameRef.current = requestAnimationFrame(loop);
-        return;
+      if (!world) { animFrameRef.current = requestAnimationFrame(loop); return; }
+
+      // Visible range
+      const sx = Math.max(0, Math.floor(camX / TILE) - 1);
+      const sy = Math.max(0, Math.floor(camY / TILE) - 1);
+      const ex = Math.min(WORLD_W, Math.ceil((camX + cw) / TILE) + 1);
+      const ey = Math.min(WORLD_H, Math.ceil((camY + ch) / TILE) + 1);
+
+      // ── Draw tiles ────────────────────────────────────────────────
+      for (let ty = sy; ty < ey; ty++) for (let tx = sx; tx < ex; tx++) {
+        const scrX = tx * TILE - camX, scrY = ty * TILE - camY;
+        const tile = world[ty][tx];
+        ctx.fillStyle = tileColor(tile);
+        ctx.fillRect(scrX, scrY, TILE + 0.5, TILE + 0.5);
+
+        // Grid
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(scrX, scrY, TILE, TILE);
+
+        // Tree
+        if (tile === TileType.Tree) {
+          const s = TILE / 32;
+          ctx.fillStyle = '#5c3d2e';
+          ctx.fillRect(scrX + 12 * s, scrY + 18 * s, 8 * s, 14 * s);
+          ctx.fillStyle = '#1e7a1e';
+          ctx.beginPath(); ctx.arc(scrX + TILE / 2, scrY + 12 * s, 12 * s, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#2fa82f';
+          ctx.beginPath(); ctx.arc(scrX + TILE / 2 - 3 * s, scrY + 9 * s, 5 * s, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Rock
+        if (tile === TileType.Rock) {
+          const s = TILE / 32;
+          ctx.fillStyle = '#808080';
+          ctx.beginPath();
+          ctx.moveTo(scrX + 4 * s, scrY + 28 * s); ctx.lineTo(scrX + 16 * s, scrY + 6 * s);
+          ctx.lineTo(scrX + 28 * s, scrY + 10 * s); ctx.lineTo(scrX + 30 * s, scrY + 28 * s);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#999';
+          ctx.beginPath();
+          ctx.moveTo(scrX + 8 * s, scrY + 24 * s); ctx.lineTo(scrX + 16 * s, scrY + 10 * s);
+          ctx.lineTo(scrX + 22 * s, scrY + 12 * s); ctx.lineTo(scrX + 14 * s, scrY + 24 * s);
+          ctx.closePath(); ctx.fill();
+        }
+
+        // Water
+        if (tile === TileType.Water) {
+          const wave = Math.sin(time / 600 + tx * 0.8 + ty * 0.5) * 0.15;
+          ctx.fillStyle = `rgba(100,180,255,${0.15 + wave})`;
+          ctx.fillRect(scrX, scrY, TILE, TILE);
+          ctx.strokeStyle = 'rgba(150,210,255,0.3)';
+          ctx.lineWidth = 1;
+          const wo = Math.sin(time / 400 + tx) * 3 * (TILE / 32);
+          ctx.beginPath();
+          ctx.moveTo(scrX, scrY + 10 * (TILE / 32) + wo);
+          ctx.quadraticCurveTo(scrX + TILE / 2, scrY + 10 * (TILE / 32) + wo + 4, scrX + TILE, scrY + 10 * (TILE / 32) + wo);
+          ctx.stroke();
+        }
       }
 
-      // Visible tile range
-      const startTileX = Math.max(0, Math.floor(camX / TILE) - 1);
-      const startTileY = Math.max(0, Math.floor(camY / TILE) - 1);
-      const endTileX = Math.min(WORLD_W, Math.ceil((camX + cw) / TILE) + 1);
-      const endTileY = Math.min(WORLD_H, Math.ceil((camY + ch) / TILE) + 1);
-
-      // Draw tiles
-      for (let ty = startTileY; ty < endTileY; ty++) {
-        for (let tx = startTileX; tx < endTileX; tx++) {
-          const screenX = tx * TILE - camX;
-          const screenY = ty * TILE - camY;
-          const tile = world[ty][tx];
-
-          ctx.fillStyle = tileColor(tile);
-          ctx.fillRect(screenX, screenY, TILE, TILE);
-
-          // Grid lines (subtle)
-          ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(screenX, screenY, TILE, TILE);
-
-          // Draw tree detail
-          if (tile === TileType.Tree) {
-            // Trunk
-            ctx.fillStyle = '#5c3d2e';
-            ctx.fillRect(screenX + 12, screenY + 18, 8, 14);
-            // Canopy
-            ctx.fillStyle = '#1e7a1e';
-            ctx.beginPath();
-            ctx.arc(screenX + TILE / 2, screenY + 12, 12, 0, Math.PI * 2);
-            ctx.fill();
-            // Highlight
-            ctx.fillStyle = '#2fa82f';
-            ctx.beginPath();
-            ctx.arc(screenX + TILE / 2 - 3, screenY + 9, 5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // Draw rock detail
-          if (tile === TileType.Rock) {
-            ctx.fillStyle = '#808080';
-            ctx.beginPath();
-            ctx.moveTo(screenX + 4, screenY + 28);
-            ctx.lineTo(screenX + 16, screenY + 6);
-            ctx.lineTo(screenX + 28, screenY + 10);
-            ctx.lineTo(screenX + 30, screenY + 28);
-            ctx.closePath();
-            ctx.fill();
-            // Highlight
-            ctx.fillStyle = '#999';
-            ctx.beginPath();
-            ctx.moveTo(screenX + 8, screenY + 24);
-            ctx.lineTo(screenX + 16, screenY + 10);
-            ctx.lineTo(screenX + 22, screenY + 12);
-            ctx.lineTo(screenX + 14, screenY + 24);
-            ctx.closePath();
-            ctx.fill();
-          }
-
-          // Draw water animation
-          if (tile === TileType.Water) {
-            const wave = Math.sin(time / 600 + tx * 0.8 + ty * 0.5) * 0.15;
-            ctx.fillStyle = `rgba(100, 180, 255, ${0.15 + wave})`;
-            ctx.fillRect(screenX, screenY, TILE, TILE);
-            // Wave lines
-            ctx.strokeStyle = 'rgba(150, 210, 255, 0.3)';
-            ctx.lineWidth = 1;
-            const waveOffset = Math.sin(time / 400 + tx) * 3;
-            ctx.beginPath();
-            ctx.moveTo(screenX, screenY + 10 + waveOffset);
-            ctx.quadraticCurveTo(screenX + TILE / 2, screenY + 10 + waveOffset + 4, screenX + TILE, screenY + 10 + waveOffset);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(screenX, screenY + 22 + waveOffset * 0.7);
-            ctx.quadraticCurveTo(screenX + TILE / 2, screenY + 22 + waveOffset * 0.7 - 3, screenX + TILE, screenY + 22 + waveOffset * 0.7);
-            ctx.stroke();
+      // ── Hover tile highlight ──────────────────────────────────────
+      const hov = hoverTileRef.current;
+      if (hov && !openTerminalId) {
+        const hx = hov.x * TILE - camX, hy = hov.y * TILE - camY;
+        const walkable = isWalkable(hov.x, hov.y);
+        const hasStation = isStationAt(hov.x, hov.y);
+        if (walkable || hasStation) {
+          ctx.strokeStyle = hasStation ? '#00d4aa' : 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(hx + 1, hy + 1, TILE - 2, TILE - 2);
+          if (walkable && !hasStation) {
+            ctx.fillStyle = 'rgba(0,212,170,0.12)';
+            ctx.fillRect(hx, hy, TILE, TILE);
           }
         }
       }
 
-      // ── Draw stations ──────────────────────────────────────────────────
-
+      // ── Draw stations ─────────────────────────────────────────────
       const pulse = Math.sin(time / 300) * 0.3 + 0.7;
-
       stationsRef.current.forEach((s, id) => {
-        const sx = s.tileX * TILE - camX;
-        const sy = s.tileY * TILE - camY;
+        const scrX = s.tileX * TILE - camX, scrY = s.tileY * TILE - camY;
+        if (scrX < -TILE * 2 || scrX > cw + TILE || scrY < -TILE * 2 || scrY > ch + TILE) return;
 
-        // Skip if off-screen
-        if (sx < -TILE || sx > cw + TILE || sy < -TILE || sy > ch + TILE) return;
-
+        const scale = TILE / 32;
         // Glow
-        const glowRadius = 20 + pulse * 8;
-        const glow = ctx.createRadialGradient(sx + TILE / 2, sy + TILE / 2, 2, sx + TILE / 2, sy + TILE / 2, glowRadius);
-        glow.addColorStop(0, 'rgba(0, 212, 170, 0.4)');
-        glow.addColorStop(1, 'rgba(0, 212, 170, 0)');
+        const gr = (20 + pulse * 8) * scale;
+        const glow = ctx.createRadialGradient(scrX + TILE / 2, scrY + TILE / 2, 2, scrX + TILE / 2, scrY + TILE / 2, gr);
+        glow.addColorStop(0, 'rgba(0,212,170,0.4)'); glow.addColorStop(1, 'rgba(0,212,170,0)');
         ctx.fillStyle = glow;
-        ctx.fillRect(sx - glowRadius, sy - glowRadius, TILE + glowRadius * 2, TILE + glowRadius * 2);
+        ctx.fillRect(scrX - gr, scrY - gr, TILE + gr * 2, TILE + gr * 2);
 
-        // Machine base
+        // Body
         ctx.fillStyle = '#1a3a3a';
-        ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-
-        // Machine border
-        ctx.strokeStyle = `rgba(0, 212, 170, ${0.6 + pulse * 0.4})`;
+        ctx.fillRect(scrX + 2 * scale, scrY + 2 * scale, TILE - 4 * scale, TILE - 4 * scale);
+        ctx.strokeStyle = `rgba(0,212,170,${0.6 + pulse * 0.4})`;
         ctx.lineWidth = 2;
-        ctx.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+        ctx.strokeRect(scrX + 2 * scale, scrY + 2 * scale, TILE - 4 * scale, TILE - 4 * scale);
 
         // Screen
-        ctx.fillStyle = `rgba(0, 212, 170, ${0.2 + pulse * 0.2})`;
-        ctx.fillRect(sx + 6, sy + 6, TILE - 12, TILE - 16);
+        ctx.fillStyle = `rgba(0,212,170,${0.2 + pulse * 0.2})`;
+        ctx.fillRect(scrX + 6 * scale, scrY + 6 * scale, TILE - 12 * scale, TILE - 16 * scale);
 
-        // Terminal icon (> _)
-        ctx.fillStyle = `rgba(0, 212, 170, ${0.7 + pulse * 0.3})`;
-        ctx.font = 'bold 10px monospace';
+        // Icon
+        ctx.fillStyle = `rgba(0,212,170,${0.7 + pulse * 0.3})`;
+        ctx.font = `bold ${10 * scale}px monospace`;
         ctx.textAlign = 'center';
-        ctx.fillText('>_', sx + TILE / 2, sy + 16);
+        ctx.fillText('>_', scrX + TILE / 2, scrY + 16 * scale);
 
-        // Status LED
-        ctx.fillStyle = id === nearbyStationRef.current ? '#00ff88' : `rgba(0, 212, 170, ${pulse})`;
-        ctx.beginPath();
-        ctx.arc(sx + TILE / 2, sy + TILE - 6, 2.5, 0, Math.PI * 2);
-        ctx.fill();
+        // LED
+        ctx.fillStyle = id === nearbyStationRef.current ? '#00ff88' : `rgba(0,212,170,${pulse})`;
+        ctx.beginPath(); ctx.arc(scrX + TILE / 2, scrY + TILE - 6 * scale, 2.5 * scale, 0, Math.PI * 2); ctx.fill();
 
-        // Interaction hint
+        // Hint
         if (id === nearbyStationRef.current) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.beginPath();
-          ctx.roundRect(sx - 10, sy - 22, TILE + 20, 18, 4);
-          ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.beginPath(); ctx.roundRect(scrX - 10 * scale, scrY - 22 * scale, TILE + 20 * scale, 18 * scale, 4); ctx.fill();
           ctx.fillStyle = '#00d4aa';
-          ctx.font = 'bold 10px monospace';
+          ctx.font = `bold ${10 * scale}px monospace`;
           ctx.textAlign = 'center';
-          ctx.fillText('Press E', sx + TILE / 2, sy - 9);
+          ctx.fillText('Press E', scrX + TILE / 2, scrY - 9 * scale);
         }
       });
 
-      // ── Draw player ────────────────────────────────────────────────────
-
-      const px = anim.x * TILE - camX;
-      const py = anim.y * TILE - camY;
+      // ── Draw player ───────────────────────────────────────────────
+      const px = anim.x * TILE - camX, py = anim.y * TILE - camY;
       const pSize = TILE * 0.7;
+      const dir = playerDirRef.current;
+      const dirX = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
+      const dirY = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
+
+      // Bob when moving
+      const bob = isMovingRef.current ? Math.sin(time / 60) * 2 : 0;
 
       // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.beginPath();
-      ctx.ellipse(px, py + pSize / 2 + 2, pSize / 2, pSize / 4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(px, py + pSize / 2 + 2, pSize / 2, pSize / 4, 0, 0, Math.PI * 2); ctx.fill();
 
       // Body
       ctx.fillStyle = '#e8a435';
-      ctx.beginPath();
-      ctx.arc(px, py, pSize / 2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py + bob, pSize / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#b07820'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py + bob, pSize / 2, 0, Math.PI * 2); ctx.stroke();
 
-      // Outline
-      ctx.strokeStyle = '#b07820';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(px, py, pSize / 2, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Direction indicator
-      let dirX = 0;
-      let dirY = 0;
-      switch (player.dir) {
-        case 'up':
-          dirY = -1;
-          break;
-        case 'down':
-          dirY = 1;
-          break;
-        case 'left':
-          dirX = -1;
-          break;
-        case 'right':
-          dirX = 1;
-          break;
-      }
-      const arrowLen = pSize / 2 + 4;
+      // Direction dot
       ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(px + dirX * arrowLen * 0.5, py + dirY * arrowLen * 0.5, 3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(px + dirX * pSize / 2 * 0.7, py + bob + dirY * pSize / 2 * 0.7, 3, 0, Math.PI * 2); ctx.fill();
 
       // Eyes
-      const eyeOffX = dirX * 3;
-      const eyeOffY = dirY * 3;
+      const ex2 = dirX * 3, ey2 = dirY * 3;
       ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(px - 4 + eyeOffX, py - 2 + eyeOffY, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(px + 4 + eyeOffX, py - 2 + eyeOffY, 3, 0, Math.PI * 2);
-      ctx.fill();
-      // Pupils
+      ctx.beginPath(); ctx.arc(px - 4 + ex2, py - 2 + bob + ey2, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 4 + ex2, py - 2 + bob + ey2, 3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#222';
-      ctx.beginPath();
-      ctx.arc(px - 4 + eyeOffX + dirX * 1.5, py - 2 + eyeOffY + dirY * 1.5, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(px + 4 + eyeOffX + dirX * 1.5, py - 2 + eyeOffY + dirY * 1.5, 1.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(px - 4 + ex2 + dirX * 1.5, py - 2 + bob + ey2 + dirY * 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 4 + ex2 + dirX * 1.5, py - 2 + bob + ey2 + dirY * 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
 
-      // ── Draw mini-map ──────────────────────────────────────────────────
-
-      const mmSize = 120;
-      const mmTile = mmSize / WORLD_W;
-      const mmX = cw - mmSize - 12;
-      const mmY = 12;
-
-      // Background
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      // ── Mini-map ──────────────────────────────────────────────────
+      const mmSize = 120, mmTile = mmSize / WORLD_W;
+      const mmX = cw - mmSize - 12, mmY = 12;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(mmX - 2, mmY - 2, mmSize + 4, mmSize + 4);
-      ctx.strokeStyle = '#30363d';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
       ctx.strokeRect(mmX - 2, mmY - 2, mmSize + 4, mmSize + 4);
 
-      // Tiles
-      for (let ty = 0; ty < WORLD_H; ty++) {
-        for (let tx = 0; tx < WORLD_W; tx++) {
-          ctx.fillStyle = tileColor(world[ty][tx]);
-          ctx.fillRect(mmX + tx * mmTile, mmY + ty * mmTile, mmTile + 0.5, mmTile + 0.5);
-        }
+      for (let ty = 0; ty < WORLD_H; ty++) for (let tx = 0; tx < WORLD_W; tx++) {
+        ctx.fillStyle = tileColor(world[ty][tx]);
+        ctx.fillRect(mmX + tx * mmTile, mmY + ty * mmTile, mmTile + 0.5, mmTile + 0.5);
       }
-
-      // Stations on mini-map
       stationsRef.current.forEach((s) => {
         ctx.fillStyle = '#00d4aa';
         ctx.fillRect(mmX + s.tileX * mmTile - 1, mmY + s.tileY * mmTile - 1, mmTile + 2, mmTile + 2);
       });
-
-      // Player on mini-map
       ctx.fillStyle = '#e8a435';
-      ctx.beginPath();
-      ctx.arc(mmX + player.x * mmTile, mmY + player.y * mmTile, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(mmX + playerTileRef.current.x * mmTile, mmY + playerTileRef.current.y * mmTile, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.5; ctx.stroke();
 
-      // View cone on mini-map
-      const viewW = cw / TILE * mmTile;
-      const viewH = ch / TILE * mmTile;
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(
-        mmX + player.x * mmTile - viewW / 2,
-        mmY + player.y * mmTile - viewH / 2,
-        viewW,
-        viewH
-      );
+      const vw = cw / TILE * mmTile, vh = ch / TILE * mmTile;
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
+      ctx.strokeRect(mmX + playerTileRef.current.x * mmTile - vw / 2, mmY + playerTileRef.current.y * mmTile - vh / 2, vw, vh);
 
-      // ── HUD ────────────────────────────────────────────────────────────
+      // ── HUD ───────────────────────────────────────────────────────
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath(); ctx.roundRect(10, ch - 48, 420, 36, 6); ctx.fill();
+      ctx.fillStyle = '#8b949e'; ctx.font = '11px monospace'; ctx.textAlign = 'left';
+      ctx.fillText('WASD move | E interact | Click tile to place terminal | Scroll zoom', 20, ch - 25);
 
-      // Controls hint
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.beginPath();
-      ctx.roundRect(10, ch - 48, 360, 36, 6);
-      ctx.fill();
-      ctx.fillStyle = '#8b949e';
-      ctx.font = '11px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('WASD move | E interact | T place terminal', 20, ch - 25);
-
-      // Terminal count
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.beginPath();
-      ctx.roundRect(10, 12, 160, 28, 6);
-      ctx.fill();
-      ctx.fillStyle = '#00d4aa';
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath(); ctx.roundRect(10, 12, 160, 28, 6); ctx.fill();
+      ctx.fillStyle = '#00d4aa'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'left';
       ctx.fillText(`Terminals: ${terminals.length}`, 20, 31);
 
-      // Coordinates
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.beginPath();
-      ctx.roundRect(10, 46, 130, 24, 6);
-      ctx.fill();
-      ctx.fillStyle = '#6e7681';
-      ctx.font = '10px monospace';
-      ctx.fillText(`x:${Math.floor(player.x)} y:${Math.floor(player.y)}`, 20, 62);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath(); ctx.roundRect(10, 46, 160, 24, 6); ctx.fill();
+      ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace';
+      ctx.fillText(`x:${playerTileRef.current.x} y:${playerTileRef.current.y}  zoom:${Math.round(zoomRef.current * 100)}%`, 20, 62);
 
       animFrameRef.current = requestAnimationFrame(loop);
     };
 
     animFrameRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animFrameRef.current); obs.disconnect(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTerminalId, isWalkable, findNearbyStation, terminals.length, tryMove, isStationAt]);
 
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      observer.disconnect();
-    };
-    // Re-run loop setup only when these change:
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTerminalId, isWalkable, findNearbyStation, terminals.length]);
-
-  // ── Close terminal popup ───────────────────────────────────────────────────
-
-  const handleCloseTerminal = useCallback(() => {
-    setOpenTerminalId(null);
-  }, []);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const openTerminal = openTerminalId ? terminals.find((t) => t.id === openTerminalId) : null;
+  const openTerminal = openTerminalId ? terminals.find(t => t.id === openTerminalId) : null;
 
   return (
     <div ref={containerRef} style={styles.container}>
-      <canvas
-        ref={canvasRef}
-        style={styles.canvas}
-        onClick={handleCanvasClick}
-      />
-
+      <canvas ref={canvasRef} style={styles.canvas} onClick={handleCanvasClick} />
       {openTerminal && (
         <TerminalPopup
           terminalId={openTerminal.id}
           onInput={(data) => sendInput(openTerminal.id, data)}
           onResize={(cols, rows) => resizeTerminal(openTerminal.id, cols, rows)}
           registerOutput={(handler) => registerOutputHandler(openTerminal.id, handler)}
-          onClose={handleCloseTerminal}
+          onClose={() => setOpenTerminalId(null)}
           title={`Station [${openTerminal.id.slice(0, 8)}]`}
         />
       )}
@@ -823,21 +613,7 @@ export default function RpgView({
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-    background: '#1a1a2e',
-  },
-  canvas: {
-    display: 'block',
-    width: '100%',
-    height: '100%',
-    imageRendering: 'pixelated',
-    cursor: 'crosshair',
-  },
+  container: { width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#1a1a2e' },
+  canvas: { display: 'block', width: '100%', height: '100%', imageRendering: 'pixelated', cursor: 'crosshair' },
 };
