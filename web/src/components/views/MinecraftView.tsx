@@ -147,9 +147,8 @@ class VoxelWorld {
     const key = posKey(x, y, z);
     this.blocks.set(key, type);
     this.userRemoved.delete(key);
-    if (!this.generated.has(key) || this.blocks.get(key) !== type) {
-      this.userAdded.set(key, type);
-    }
+    // Always track as user-added (even if same type as generated — simplifies diff)
+    this.userAdded.set(key, type);
   }
 
   // Track a user modification (break)
@@ -203,9 +202,11 @@ class VoxelWorld {
   applyDiff(diff: WorldDiff) {
     for (const key of diff.removed) {
       this.blocks.delete(key);
+      this.userRemoved.add(key);
     }
     for (const [key, type] of Object.entries(diff.added)) {
-      this.blocks.set(key, type);
+      this.blocks.set(key, type as BlockType);
+      this.userAdded.set(key, type as BlockType);
     }
   }
 }
@@ -381,11 +382,73 @@ function isOnGround(world: VoxelWorld, pos: THREE.Vector3, hw: number, eyeH: num
   return false;
 }
 
-function resolveAxis(
+function resolveY(
   world: VoxelWorld,
   pos: THREE.Vector3,
   vel: THREE.Vector3,
-  axis: 'x' | 'y' | 'z',
+  dt: number,
+  hw: number,
+  bodyH: number,
+  eyeH: number,
+): { y: number; grounded: boolean } {
+  const newY = pos.y + vel.y * dt;
+  const testPos = pos.clone();
+  testPos.y = newY;
+
+  if (!isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
+    return { y: newY, grounded: false };
+  }
+
+  // Collision — find the resolved position
+  if (vel.y <= 0) {
+    // Falling: snap feet to top of the highest block below
+    const feetY = newY - eyeH;
+    const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
+    const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+    let highestTop = -Infinity;
+    for (let bx = bx1; bx <= bx2; bx++) {
+      for (let bz = bz1; bz <= bz2; bz++) {
+        for (let by = Math.floor(feetY); by >= Math.floor(feetY) - 1; by--) {
+          if (world.isSolid(bx, by, bz)) {
+            highestTop = Math.max(highestTop, by + 1);
+          }
+        }
+      }
+    }
+    if (highestTop > -Infinity) {
+      vel.y = 0;
+      return { y: highestTop + eyeH, grounded: true };
+    }
+  } else {
+    // Rising: snap head to bottom of the lowest block above
+    const headY = newY - eyeH + bodyH;
+    const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
+    const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+    let lowestBottom = Infinity;
+    for (let bx = bx1; bx <= bx2; bx++) {
+      for (let bz = bz1; bz <= bz2; bz++) {
+        for (let by = Math.floor(headY); by <= Math.floor(headY) + 1; by++) {
+          if (world.isSolid(bx, by, bz)) {
+            lowestBottom = Math.min(lowestBottom, by);
+          }
+        }
+      }
+    }
+    if (lowestBottom < Infinity) {
+      vel.y = 0;
+      return { y: lowestBottom - bodyH + eyeH, grounded: false };
+    }
+  }
+
+  vel.y = 0;
+  return { y: pos.y, grounded: vel.y <= 0 };
+}
+
+function resolveXZ(
+  world: VoxelWorld,
+  pos: THREE.Vector3,
+  vel: THREE.Vector3,
+  axis: 'x' | 'z',
   dt: number,
   hw: number,
   bodyH: number,
@@ -396,7 +459,6 @@ function resolveAxis(
   testPos[axis] = newVal;
 
   if (isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
-    // Collision — don't move on this axis
     vel[axis] = 0;
     return pos[axis];
   }
@@ -773,12 +835,13 @@ export default function MinecraftView({
         const hw = PLAYER_WIDTH / 2;
 
         // Resolve Y first (gravity/jump), then X, then Z
-        pos.y = resolveAxis(world, pos, vel, 'y', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.x = resolveAxis(world, pos, vel, 'x', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.z = resolveAxis(world, pos, vel, 'z', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        const yResult = resolveY(world, pos, vel, dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        pos.y = yResult.y;
+        pos.x = resolveXZ(world, pos, vel, 'x', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        pos.z = resolveXZ(world, pos, vel, 'z', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
 
-        // Ground detection — check every frame
-        onGroundRef.current = isOnGround(world, pos, hw, PLAYER_HEIGHT);
+        // Ground detection
+        onGroundRef.current = yResult.grounded || isOnGround(world, pos, hw, PLAYER_HEIGHT);
 
         // Safety: don't fall into the void
         if (pos.y < -10) {
