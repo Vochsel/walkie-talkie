@@ -19,11 +19,18 @@ function parseArgs() {
   let force = false;
   let open = false;
 
-  for (const arg of args) {
-    if (arg.startsWith('--port=')) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--help' || arg === '-h') {
+      printHelp();
+      process.exit(0);
+    } else if (arg === '--version' || arg === '-v') {
+      console.log('1.0.2');
+      process.exit(0);
+    } else if (arg.startsWith('--port=')) {
       port = parseInt(arg.split('=')[1]);
-    } else if (arg === '-p' && args.indexOf(arg) + 1 < args.length) {
-      port = parseInt(args[args.indexOf(arg) + 1]);
+    } else if ((arg === '-p') && i + 1 < args.length) {
+      port = parseInt(args[++i]);
     } else if (arg === '--force' || arg === '-f') {
       force = true;
     } else if (arg === '--open' || arg === '-o') {
@@ -34,9 +41,26 @@ function parseArgs() {
   return { port, force, open };
 }
 
+function printHelp() {
+  console.log(`
+  ${CYAN}${BOLD}walkie-talkie${RESET} ${DIM}v1.0.2${RESET}
+  ${DIM}Remote terminal access from your browser${RESET}
+
+  ${BOLD}USAGE${RESET}
+    ${WHITE}walkie-talkie${RESET} ${DIM}[options]${RESET}
+
+  ${BOLD}OPTIONS${RESET}
+    ${WHITE}-p, --port=<number>${RESET}  ${DIM}Port to listen on (default: ${DEFAULT_PORT})${RESET}
+    ${WHITE}-f, --force${RESET}          ${DIM}Kill existing process on the port${RESET}
+    ${WHITE}-o, --open${RESET}           ${DIM}Open browser automatically${RESET}
+    ${WHITE}-h, --help${RESET}           ${DIM}Show this help message${RESET}
+    ${WHITE}-v, --version${RESET}        ${DIM}Show version number${RESET}
+`);
+}
+
 function banner() {
   console.log('');
-  console.log(`  ${CYAN}${BOLD}walkie-talkie${RESET}  ${DIM}v1.0.0${RESET}`);
+  console.log(`  ${CYAN}${BOLD}walkie-talkie${RESET}  ${DIM}v1.0.2${RESET}`);
   console.log(`  ${DIM}Remote terminal access from your browser${RESET}`);
   console.log('');
 }
@@ -128,8 +152,13 @@ async function main() {
   });
 
   // Graceful shutdown
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) process.exit(1);
+    shuttingDown = true;
     console.log(`\n  ${DIM}Shutting down...${RESET}`);
+    const forceExit = setTimeout(() => process.exit(1), 3000);
+    forceExit.unref();
     await server.stop();
     process.exit(0);
   };

@@ -156,6 +156,7 @@ export function createServer(port: number = DEFAULT_PORT) {
     stop: () => new Promise<void>((resolve) => {
       clearInterval(hbInterval);
       terminals.forEach((s) => s.kill());
+      wss.clients.forEach((ws) => ws.terminate());
       wss.close(() => server.close(() => resolve()));
     }),
     generateToken: () => tokens.generate(),

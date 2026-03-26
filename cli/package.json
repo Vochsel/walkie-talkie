@@ -1,6 +1,6 @@
 {
   "name": "@vochsel/walkie-talkie",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Remote terminal access from your browser",
   "bin": {
     "walkie-talkie": "dist/index.js"
