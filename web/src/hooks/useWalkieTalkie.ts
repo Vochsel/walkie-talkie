@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { TerminalInfo, ServerMessage } from '@walkie-talkie/shared';
 import { WalkieTalkieClient, ConnectionState } from '@/lib/ws-client';
+import { saveConnection, removeConnection } from '@/lib/storage';
 
 export type TerminalOutputHandler = (terminalId: string, data: string) => void;
 
@@ -18,6 +19,19 @@ export function useWalkieTalkie() {
 
     const unsubState = client.onStateChange((state) => {
       setConnectionState(state);
+
+      // Save to localStorage on successful connection
+      if (state === 'connected') {
+        const sessionId = client.getSessionId();
+        const serverUrl = client.getServerUrl();
+        if (sessionId && serverUrl) {
+          saveConnection({
+            serverUrl,
+            sessionId,
+            connectedAt: Date.now(),
+          });
+        }
+      }
     });
 
     const unsubMsg = client.onMessage((msg: ServerMessage) => {
@@ -51,10 +65,17 @@ export function useWalkieTalkie() {
     clientRef.current?.connect(serverUrl, token);
   }, []);
 
+  const resumeSession = useCallback((serverUrl: string, sessionId: string) => {
+    clientRef.current?.resumeSession(serverUrl, sessionId);
+  }, []);
+
   const disconnect = useCallback(() => {
+    const serverUrl = clientRef.current?.getServerUrl();
     clientRef.current?.disconnect();
     setTerminals([]);
     outputHandlersRef.current.clear();
+    // Remove saved connection on intentional disconnect
+    if (serverUrl) removeConnection(serverUrl);
   }, []);
 
   const createTerminal = useCallback((cols: number, rows: number) => {
@@ -91,6 +112,7 @@ export function useWalkieTalkie() {
     connectionState,
     terminals,
     connect,
+    resumeSession,
     disconnect,
     createTerminal,
     sendInput,

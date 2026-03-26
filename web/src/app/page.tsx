@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
@@ -8,6 +8,7 @@ import { useWalkieTalkie } from '@/hooks/useWalkieTalkie';
 import ConnectScreen from '@/components/ConnectScreen';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import ViewSwitcher, { ViewType } from '@/components/ViewSwitcher';
+import { getSavedConnections } from '@/lib/storage';
 
 const ClassicView = dynamic(() => import('@/components/views/ClassicView'), { ssr: false });
 const SidebarView = dynamic(() => import('@/components/views/SidebarView'), { ssr: false });
@@ -32,6 +33,7 @@ function AppContent() {
     connectionState,
     terminals,
     connect,
+    resumeSession,
     disconnect,
     createTerminal,
     sendInput,
@@ -44,6 +46,8 @@ function AppContent() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ViewType>('classic');
 
+  const autoResumedRef = useRef(false);
+
   // Auto-connect from QR code URL params
   useEffect(() => {
     const token = searchParams.get('token');
@@ -51,8 +55,22 @@ function AppContent() {
     if (token) {
       const serverUrl = server || `${window.location.protocol}//${window.location.hostname}:3456`;
       connect(serverUrl, token);
+      return;
     }
-  }, [searchParams, connect]);
+
+    // Auto-resume from localStorage (only once)
+    if (!autoResumedRef.current) {
+      autoResumedRef.current = true;
+      const saved = getSavedConnections();
+      if (saved.length > 0) {
+        const recent = saved[0];
+        // Only auto-resume if connected within last 24 hours
+        if (Date.now() - recent.connectedAt < 24 * 60 * 60 * 1000) {
+          resumeSession(recent.serverUrl, recent.sessionId);
+        }
+      }
+    }
+  }, [searchParams, connect, resumeSession]);
 
   // When we connect, request a terminal
   useEffect(() => {
@@ -74,7 +92,7 @@ function AppContent() {
 
   useEffect(() => {
     if (connectionState === 'error') {
-      setConnectError('Authentication failed. Token may be expired or invalid.');
+      setConnectError('Authentication failed. Session may have expired — try a new token.');
     }
   }, [connectionState]);
 
@@ -86,8 +104,16 @@ function AppContent() {
     [connect]
   );
 
+  const handleResume = useCallback(
+    (serverUrl: string, sessionId: string) => {
+      setConnectError(null);
+      resumeSession(serverUrl, sessionId);
+    },
+    [resumeSession]
+  );
+
   if (connectionState === 'disconnected' || connectionState === 'error') {
-    return <ConnectScreen onConnect={handleConnect} error={connectError} />;
+    return <ConnectScreen onConnect={handleConnect} onResume={handleResume} error={connectError} />;
   }
 
   if (connectionState === 'connecting' || connectionState === 'authenticating') {

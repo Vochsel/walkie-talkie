@@ -14,9 +14,9 @@ export type StateHandler = (state: ConnectionState) => void;
 
 export class WalkieTalkieClient {
   private ws: WebSocket | null = null;
-  private serverUrl: string = '';
+  private _serverUrl: string = '';
   private token: string = '';
-  private sessionId: string | null = null;
+  private _sessionId: string | null = null;
   private messageHandlers: Set<MessageHandler> = new Set();
   private stateHandlers: Set<StateHandler> = new Set();
   private state: ConnectionState = 'disconnected';
@@ -36,14 +36,23 @@ export class WalkieTalkieClient {
 
   connect(serverUrl: string, token: string): void {
     this.intentionalClose = false;
-    this.serverUrl = serverUrl;
+    this._serverUrl = serverUrl;
     this.token = token;
+    this._sessionId = null;
+    this.doConnect();
+  }
+
+  resumeSession(serverUrl: string, sessionId: string): void {
+    this.intentionalClose = false;
+    this._serverUrl = serverUrl;
+    this.token = '';
+    this._sessionId = sessionId;
     this.doConnect();
   }
 
   disconnect(): void {
     this.intentionalClose = true;
-    this.sessionId = null;
+    this._sessionId = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -62,7 +71,11 @@ export class WalkieTalkieClient {
   }
 
   getSessionId(): string | null {
-    return this.sessionId;
+    return this._sessionId;
+  }
+
+  getServerUrl(): string {
+    return this._serverUrl;
   }
 
   getState(): ConnectionState {
@@ -75,8 +88,7 @@ export class WalkieTalkieClient {
       this.ws = null;
     }
 
-    // Build WebSocket URL
-    const httpUrl = this.serverUrl.replace(/\/$/, '');
+    const httpUrl = this._serverUrl.replace(/\/$/, '');
     const wsUrl = httpUrl.replace(/^http/, 'ws') + WS_PATH;
 
     this.setState(this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting');
@@ -87,9 +99,8 @@ export class WalkieTalkieClient {
       this.setState('authenticating');
       this.reconnectAttempt = 0;
 
-      // Try session resume first, then token auth
-      if (this.sessionId) {
-        this.send({ type: 'auth:resume', sessionId: this.sessionId });
+      if (this._sessionId) {
+        this.send({ type: 'auth:resume', sessionId: this._sessionId });
       } else {
         this.send({ type: 'auth', token: this.token });
       }
@@ -104,10 +115,10 @@ export class WalkieTalkieClient {
       }
 
       if (msg.type === 'auth:ok') {
-        this.sessionId = msg.sessionId;
+        this._sessionId = msg.sessionId;
         this.setState('connected');
       } else if (msg.type === 'auth:fail') {
-        this.sessionId = null;
+        this._sessionId = null;
         this.setState('error');
         return;
       }
@@ -123,9 +134,7 @@ export class WalkieTalkieClient {
       }
     };
 
-    this.ws.onerror = () => {
-      // onclose will fire after this
-    };
+    this.ws.onerror = () => {};
   }
 
   private scheduleReconnect(): void {
