@@ -1,6 +1,6 @@
 {
   "name": "@walkie-talkie/react",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "React hooks and components for walkie-talkie terminal servers",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,8 +30,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@walkie-talkie/client": "workspace:*",
-    "@walkie-talkie/shared": "workspace:*"
+    "@walkie-talkie/client": "^1.0.2",
+    "@walkie-talkie/shared": "^1.0.2"
   },
   "peerDependencies": {
     "@xterm/addon-fit": ">=0.10.0",
