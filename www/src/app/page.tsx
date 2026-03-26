@@ -1,54 +1,59 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
-const ACCENT = '#00d4aa';
-const BG = '#0a0a0f';
-const CARD_BG = '#12121a';
-const CARD_BORDER = '#1e1e2e';
-const TEXT = '#e0e0e0';
-const TEXT_DIM = '#888';
+const TEXT = '#26251e';
+const TEXT_SEC = 'rgba(38, 37, 30, 0.55)';
+const TEXT_MUTED = 'rgba(38, 37, 30, 0.35)';
+const BG = '#f7f7f4';
+const BG_CODE = '#14120b';
+const BORDER = 'rgba(38, 37, 30, 0.08)';
+const BORDER_HOVER = 'rgba(38, 37, 30, 0.16)';
+const SURFACE = 'rgba(38, 37, 30, 0.03)';
 const MAX_WIDTH = 1100;
 
-function TerminalWindow({ children, title, glow }: { children: React.ReactNode; title?: string; glow?: boolean }) {
+function CodeBlock({ children, title }: { children: React.ReactNode; title?: string }) {
   return (
     <div
       style={{
-        background: '#0d0d14',
-        border: `1px solid ${CARD_BORDER}`,
+        background: BG_CODE,
         borderRadius: 12,
         overflow: 'hidden',
-        boxShadow: glow
-          ? `0 0 60px rgba(0, 212, 170, 0.15), 0 0 120px rgba(0, 212, 170, 0.05)`
-          : '0 4px 24px rgba(0,0,0,0.4)',
-        maxWidth: 680,
-        width: '100%',
+        border: `1px solid rgba(237, 236, 236, 0.08)`,
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '12px 16px',
-          background: '#08080d',
-          borderBottom: `1px solid ${CARD_BORDER}`,
-        }}
-      >
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57' }} />
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e' }} />
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28c840' }} />
-        {title && (
-          <span style={{ marginLeft: 8, fontSize: 13, color: TEXT_DIM, fontFamily: 'monospace' }}>{title}</span>
-        )}
-      </div>
+      {title && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 16px',
+            borderBottom: `1px solid rgba(237, 236, 236, 0.06)`,
+          }}
+        >
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'rgba(237, 236, 236, 0.12)' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'rgba(237, 236, 236, 0.12)' }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'rgba(237, 236, 236, 0.12)' }} />
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 12,
+              color: 'rgba(237, 236, 236, 0.4)',
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+            }}
+          >
+            {title}
+          </span>
+        </div>
+      )}
       <div
         style={{
           padding: '20px 24px',
-          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          fontFamily: "'Berkeley Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
           fontSize: 14,
-          lineHeight: 1.7,
-          color: TEXT,
+          lineHeight: 1.8,
+          color: '#edecec',
           overflowX: 'auto',
         }}
       >
@@ -58,77 +63,107 @@ function TerminalWindow({ children, title, glow }: { children: React.ReactNode; 
   );
 }
 
-function FeatureCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div
-      style={{
-        background: CARD_BG,
-        border: `1px solid ${CARD_BORDER}`,
-        borderRadius: 12,
-        padding: '28px 24px',
-        transition: 'border-color 0.3s, box-shadow 0.3s',
-        cursor: 'default',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = ACCENT;
-        e.currentTarget.style.boxShadow = `0 0 30px rgba(0, 212, 170, 0.08)`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = CARD_BORDER;
-        e.currentTarget.style.boxShadow = 'none';
-      }}
-    >
-      <h3 style={{ margin: '0 0 10px 0', fontSize: 18, fontWeight: 600, color: '#fff' }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: TEXT_DIM }}>{description}</p>
-    </div>
-  );
-}
-
-function StepCard({ number, title, description }: { number: number; title: string; description: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-      <div
-        style={{
-          minWidth: 44,
-          height: 44,
-          borderRadius: '50%',
-          background: `${ACCENT}15`,
-          border: `1px solid ${ACCENT}40`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          fontWeight: 700,
-          color: ACCENT,
-        }}
-      >
-        {number}
-      </div>
-      <div>
-        <h3 style={{ margin: '0 0 6px 0', fontSize: 17, fontWeight: 600, color: '#fff' }}>{title}</h3>
-        <p style={{ margin: 0, fontSize: 15, color: TEXT_DIM, lineHeight: 1.5 }}>{description}</p>
-      </div>
-    </div>
-  );
-}
-
 function CodeLine({ prompt, children }: { prompt?: boolean; children: React.ReactNode }) {
   return (
     <div style={{ whiteSpace: 'pre' }}>
-      {prompt && <span style={{ color: ACCENT }}>$ </span>}
+      {prompt && <span style={{ color: 'rgba(237, 236, 236, 0.35)' }}>$ </span>}
       {children}
     </div>
   );
 }
 
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <a
+      href={href}
+      style={{
+        fontSize: 14,
+        color: hovered ? TEXT : TEXT_SEC,
+        textDecoration: 'none',
+        transition: 'color 0.15s ease',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {children}
+    </a>
+  );
+}
+
+function Card({
+  title,
+  description,
+  href,
+  linkText,
+}: {
+  title: string;
+  description: string;
+  href?: string;
+  linkText?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const inner = (
+    <div
+      style={{
+        padding: '36px 32px',
+        borderRadius: 12,
+        border: `1px solid ${hovered ? BORDER_HOVER : BORDER}`,
+        background: hovered ? 'rgba(38, 37, 30, 0.02)' : 'transparent',
+        transition: 'all 0.2s ease',
+        cursor: href ? 'pointer' : 'default',
+        height: '100%',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <h3
+        style={{
+          margin: '0 0 10px 0',
+          fontSize: 18,
+          fontWeight: 600,
+          color: TEXT,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {title}
+      </h3>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: TEXT_SEC }}>
+        {description}
+      </p>
+      {linkText && (
+        <p
+          style={{
+            margin: '16px 0 0 0',
+            fontSize: 14,
+            fontWeight: 500,
+            color: hovered ? TEXT : TEXT_SEC,
+            transition: 'color 0.15s ease',
+          }}
+        >
+          {linkText} &rarr;
+        </p>
+      )}
+    </div>
+  );
+
+  if (href) {
+    return (
+      <a href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
+        {inner}
+      </a>
+    );
+  }
+  return inner;
+}
+
 export default function Page() {
-  const mainRef = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    document.documentElement.style.scrollBehavior = 'smooth';
-    return () => {
-      document.documentElement.style.scrollBehavior = '';
-    };
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const container: React.CSSProperties = {
@@ -140,34 +175,33 @@ export default function Page() {
   };
 
   const sectionStyle: React.CSSProperties = {
-    paddingTop: 120,
+    paddingTop: 140,
     paddingBottom: 40,
   };
 
   const sectionHeading: React.CSSProperties = {
-    fontSize: 36,
-    fontWeight: 700,
-    color: '#fff',
-    marginBottom: 16,
-    letterSpacing: '-0.02em',
+    fontSize: 38,
+    fontWeight: 600,
+    color: TEXT,
+    marginBottom: 12,
+    letterSpacing: '-0.03em',
+    lineHeight: 1.15,
   };
 
   const sectionSub: React.CSSProperties = {
     fontSize: 17,
-    color: TEXT_DIM,
-    marginBottom: 56,
+    color: TEXT_SEC,
+    marginBottom: 60,
     lineHeight: 1.6,
-    maxWidth: 600,
+    maxWidth: 520,
   };
 
   return (
     <div
-      ref={mainRef}
       style={{
         background: BG,
         color: TEXT,
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         minHeight: '100vh',
       }}
     >
@@ -177,9 +211,10 @@ export default function Page() {
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          background: `${BG}ee`,
-          backdropFilter: 'blur(12px)',
-          borderBottom: `1px solid ${CARD_BORDER}`,
+          background: scrolled ? `${BG}ee` : 'transparent',
+          backdropFilter: scrolled ? 'blur(16px)' : 'none',
+          borderBottom: scrolled ? `1px solid ${BORDER}` : '1px solid transparent',
+          transition: 'all 0.2s ease',
         }}
       >
         <div
@@ -188,54 +223,48 @@ export default function Page() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            height: 60,
+            height: 64,
           }}
         >
           <a
             href="/"
             style={{
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: 700,
-              color: '#fff',
+              color: TEXT,
               textDecoration: 'none',
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.02em',
             }}
           >
             walkie-talkie
           </a>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-            {['Features', 'Setup', 'Docs', 'Showcase'].map((link) => (
-              <a
-                key={link}
-                href={`#${link.toLowerCase()}`}
-                style={{
-                  fontSize: 14,
-                  color: TEXT_DIM,
-                  textDecoration: 'none',
-                  transition: 'color 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
-              >
-                {link}
-              </a>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+            <NavLink href="#how-it-works">How it works</NavLink>
+            <NavLink href="#build">Build</NavLink>
+            <NavLink href="#protocol">Protocol</NavLink>
             <a
               href="https://github.com/vochsel/walkie-talkie"
               target="_blank"
               rel="noopener noreferrer"
               style={{
                 fontSize: 14,
-                color: '#fff',
+                fontWeight: 500,
+                color: TEXT,
                 textDecoration: 'none',
-                background: CARD_BG,
-                border: `1px solid ${CARD_BORDER}`,
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
                 borderRadius: 8,
-                padding: '6px 16px',
-                transition: 'border-color 0.2s',
+                padding: '7px 16px',
+                transition: 'all 0.15s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = ACCENT)}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = CARD_BORDER)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(38, 37, 30, 0.06)';
+                e.currentTarget.style.borderColor = BORDER_HOVER;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = SURFACE;
+                e.currentTarget.style.borderColor = BORDER;
+              }}
             >
               GitHub
             </a>
@@ -244,16 +273,26 @@ export default function Page() {
       </nav>
 
       {/* Hero */}
-      <section style={{ ...sectionStyle, paddingTop: 100, paddingBottom: 80 }}>
-        <div style={{ ...container, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <section style={{ paddingTop: 120, paddingBottom: 100 }}>
+        <div
+          style={{
+            ...container,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            animation: 'fadeSlideUp 0.6s ease-out',
+          }}
+        >
           <h1
             style={{
-              fontSize: 64,
-              fontWeight: 800,
-              color: '#fff',
-              margin: '0 0 20px 0',
+              fontSize: 72,
+              fontWeight: 600,
+              color: TEXT,
+              margin: '0 0 24px 0',
               letterSpacing: '-0.04em',
-              lineHeight: 1.1,
+              lineHeight: 1.05,
+              maxWidth: 800,
             }}
           >
             Your terminal, anywhere.
@@ -261,351 +300,425 @@ export default function Page() {
           <p
             style={{
               fontSize: 20,
-              color: TEXT_DIM,
-              maxWidth: 560,
+              color: TEXT_SEC,
+              maxWidth: 480,
               lineHeight: 1.6,
-              margin: '0 0 40px 0',
+              margin: '0 0 48px 0',
+              fontWeight: 400,
             }}
           >
-            One command to start. QR code to connect. Access your terminal from any browser on any device.
+            Access your terminal from any browser. One command. That&apos;s it.
           </p>
-          <div style={{ display: 'flex', gap: 16, marginBottom: 56 }}>
-            <a
-              href="#setup"
-              style={{
-                background: ACCENT,
-                color: '#0a0a0f',
-                padding: '12px 28px',
-                borderRadius: 8,
-                fontSize: 15,
-                fontWeight: 600,
-                textDecoration: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'opacity 0.2s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-            >
-              Get Started
-            </a>
-            <a
-              href="https://github.com/vochsel/walkie-talkie"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                background: 'transparent',
-                color: '#fff',
-                padding: '12px 28px',
-                borderRadius: 8,
-                fontSize: 15,
-                fontWeight: 600,
-                textDecoration: 'none',
-                border: `1px solid ${CARD_BORDER}`,
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = ACCENT)}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = CARD_BORDER)}
-            >
-              View on GitHub
-            </a>
+
+          {/* The one command */}
+          <div
+            style={{
+              background: BG_CODE,
+              borderRadius: 12,
+              padding: '18px 32px',
+              fontFamily: "'Berkeley Mono', 'SF Mono', 'Fira Code', monospace",
+              fontSize: 16,
+              color: '#edecec',
+              border: `1px solid rgba(237, 236, 236, 0.08)`,
+              marginBottom: 24,
+              userSelect: 'all',
+              cursor: 'text',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <span style={{ color: 'rgba(237, 236, 236, 0.35)' }}>$ </span>
+            npx @vochsel/walkie-talkie@latest --open
           </div>
-          <TerminalWindow title="walkie-talkie" glow>
-            <CodeLine prompt>npx walkie-talkie</CodeLine>
-            <div style={{ height: 12 }} />
-            <CodeLine>
-              <span style={{ color: ACCENT, fontWeight: 700 }}>{'  walkie-talkie'}</span>
-              <span style={{ color: TEXT_DIM }}> v1.0.0</span>
-            </CodeLine>
-            <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  Remote terminal access from your browser'}</span>
-            </CodeLine>
-            <div style={{ height: 12 }} />
-            <CodeLine>
-              <span style={{ color: '#28c840' }}>{'  Server running'}</span>
-            </CodeLine>
-            <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  Local: '}</span>
-              <span style={{ color: '#fff' }}>http://localhost:3456</span>
-            </CodeLine>
-            <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  Token: '}</span>
-              <span style={{ color: ACCENT, fontWeight: 700 }}>a7f3-b2c1-d9e0-f456</span>
-            </CodeLine>
-            <div style={{ height: 12 }} />
-            <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  Open in browser:'}</span>
-            </CodeLine>
-            <CodeLine>
-              <span style={{ color: ACCENT, textDecoration: 'underline' }}>{'  https://demo.walkie-talkie.dev?server=...&token=a7f3-b2c1-d9e0-f456'}</span>
-            </CodeLine>
-          </TerminalWindow>
+          <p style={{ fontSize: 14, color: TEXT_MUTED }}>
+            No install. No config. No signup.
+          </p>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" style={sectionStyle}>
+      {/* How it works — dead simple */}
+      <section id="how-it-works" style={{ paddingTop: 100, paddingBottom: 40 }}>
+        <div style={{ ...container, textAlign: 'center' }}>
+          <h2 style={{ ...sectionHeading, marginBottom: 16 }}>How it works</h2>
+          <p style={{ ...sectionSub, margin: '0 auto 64px', maxWidth: 440 }}>
+            A WebSocket server that bridges your terminal to the browser. Secure tokens, real-time I/O.
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 80,
+              flexWrap: 'wrap',
+            }}
+          >
+            {[
+              { step: '1', label: 'Run the command', detail: 'Starts a local server with a unique token' },
+              { step: '2', label: 'Open the link', detail: 'Or scan the QR code from your phone' },
+              { step: '3', label: 'You\'re connected', detail: 'Full terminal access in your browser' },
+            ].map((s) => (
+              <div key={s.step} style={{ maxWidth: 200, textAlign: 'center' }}>
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    border: `1px solid ${BORDER}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: TEXT_SEC,
+                    margin: '0 auto 16px',
+                  }}
+                >
+                  {s.step}
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: TEXT, marginBottom: 6 }}>{s.label}</h3>
+                <p style={{ fontSize: 14, color: TEXT_SEC, lineHeight: 1.5 }}>{s.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Build your own */}
+      <section id="build" style={sectionStyle}>
         <div style={container}>
-          <h2 style={sectionHeading}>Why walkie-talkie?</h2>
+          <h2 style={sectionHeading}>Build on top of it</h2>
           <p style={sectionSub}>
-            Everything you need for remote terminal access, nothing you don&apos;t.
+            walkie-talkie gives you remote terminal access as a primitive. What you build with it is up to you.
           </p>
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 20,
+              gap: 16,
+              marginBottom: 80,
             }}
           >
-            <FeatureCard
-              title="One command"
-              description="npx walkie-talkie and you're running. No install, no config."
+            <Card
+              title="Vibe code your own dev environment"
+              description="Build custom agent UIs, terminal dashboards, or AI-powered dev tools. The WebSocket protocol is simple — connect and start building."
             />
-            <FeatureCard
-              title="Secure by default"
-              description="Magic tokens, single-use, 5-minute expiry. QR codes for easy pairing."
+            <Card
+              title="Use the client libraries"
+              description="Drop in the React hooks or connect directly via WebSocket from any language. TypeScript, Python, Go — whatever you're working in."
             />
-            <FeatureCard
-              title="Cross-platform"
-              description="Mac, Windows, Linux. Works everywhere Node.js runs."
-            />
-            <FeatureCard
-              title="Multiple terminals"
-              description="Open as many terminals as you need. Tabs, splits, whatever your client wants."
-            />
-            <FeatureCard
-              title="Any browser"
-              description="Connect from your phone, tablet, laptop. xterm.js rendering."
-            />
-            <FeatureCard
-              title="Tunnel ready"
-              description="ngrok integration for cross-network access with automatic HTTPS."
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Setup */}
-      <section id="setup" style={sectionStyle}>
-        <div style={container}>
-          <h2 style={sectionHeading}>Get started in 30 seconds</h2>
-          <p style={sectionSub}>Three steps. That&apos;s it.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 36, marginBottom: 72 }}>
-            <StepCard
-              number={1}
-              title="Start the server"
-              description="npx walkie-talkie"
-            />
-            <StepCard
-              number={2}
-              title="Open your browser"
-              description="http://localhost:3456"
-            />
-            <StepCard
-              number={3}
-              title="Connect with the token from your terminal"
-              description="Enter the token displayed in your terminal, or scan the QR code."
+            <Card
+              title="Connect AI agents"
+              description="Give your AI agents a real terminal. Code execution, system access, tool use — all through a clean, authenticated WebSocket connection."
             />
           </div>
 
-          <div style={{ marginTop: 20 }}>
-            <h3 style={{ fontSize: 22, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
-              Or build your own client
-            </h3>
-            <p style={{ fontSize: 15, color: TEXT_DIM, marginBottom: 28, lineHeight: 1.6 }}>
-              The WebSocket protocol is simple and documented. Connect from any language.
-            </p>
-            <TerminalWindow title="client.ts">
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#c678dd' }}>const</span>
-                <span style={{ color: TEXT }}> ws </span>
-                <span style={{ color: '#c678dd' }}>=</span>
-                <span style={{ color: TEXT }}> </span>
-                <span style={{ color: '#c678dd' }}>new</span>
-                <span style={{ color: '#61afef' }}> WebSocket</span>
-                <span style={{ color: TEXT }}>(</span>
-                <span style={{ color: '#98c379' }}>&apos;ws://localhost:3456/ws&apos;</span>
-                <span style={{ color: TEXT }}>);</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>ws.</span>
-                <span style={{ color: '#61afef' }}>send</span>
-                <span style={{ color: TEXT }}>(JSON.</span>
-                <span style={{ color: '#61afef' }}>stringify</span>
-                <span style={{ color: TEXT }}>(</span>
-                <span style={{ color: TEXT }}>{'{ '}</span>
-                <span style={{ color: '#e06c75' }}>type</span>
-                <span style={{ color: TEXT }}>: </span>
-                <span style={{ color: '#98c379' }}>&apos;auth&apos;</span>
-                <span style={{ color: TEXT }}>, </span>
-                <span style={{ color: '#e06c75' }}>token</span>
-                <span style={{ color: TEXT }}>: </span>
-                <span style={{ color: '#98c379' }}>&apos;your-token&apos;</span>
-                <span style={{ color: TEXT }}>{' }'}</span>
-                <span style={{ color: TEXT }}>));</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>ws.</span>
-                <span style={{ color: '#61afef' }}>send</span>
-                <span style={{ color: TEXT }}>(JSON.</span>
-                <span style={{ color: '#61afef' }}>stringify</span>
-                <span style={{ color: TEXT }}>(</span>
-                <span style={{ color: TEXT }}>{'{ '}</span>
-                <span style={{ color: '#e06c75' }}>type</span>
-                <span style={{ color: TEXT }}>: </span>
-                <span style={{ color: '#98c379' }}>&apos;terminal:create&apos;</span>
-                <span style={{ color: TEXT }}>, </span>
-                <span style={{ color: '#e06c75' }}>cols</span>
-                <span style={{ color: TEXT }}>: </span>
-                <span style={{ color: '#d19a66' }}>80</span>
-                <span style={{ color: TEXT }}>, </span>
-                <span style={{ color: '#e06c75' }}>rows</span>
-                <span style={{ color: TEXT }}>: </span>
-                <span style={{ color: '#d19a66' }}>24</span>
-                <span style={{ color: TEXT }}>{' }'}</span>
-                <span style={{ color: TEXT }}>));</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>ws.</span>
-                <span style={{ color: '#e06c75' }}>onmessage</span>
-                <span style={{ color: TEXT }}> = </span>
-                <span style={{ color: TEXT }}>(</span>
-                <span style={{ color: '#e5c07b' }}>e</span>
-                <span style={{ color: TEXT }}>) </span>
-                <span style={{ color: '#c678dd' }}>=&gt;</span>
-                <span style={{ color: TEXT }}> {'{'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>{'  '}</span>
-                <span style={{ color: '#c678dd' }}>const</span>
-                <span style={{ color: TEXT }}> msg = JSON.</span>
-                <span style={{ color: '#61afef' }}>parse</span>
-                <span style={{ color: TEXT }}>(e.data);</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>{'  '}</span>
-                <span style={{ color: '#c678dd' }}>if</span>
-                <span style={{ color: TEXT }}> (msg.type === </span>
-                <span style={{ color: '#98c379' }}>&apos;terminal:output&apos;</span>
-                <span style={{ color: TEXT }}>) {'{'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>{'    '}terminal.</span>
-                <span style={{ color: '#61afef' }}>write</span>
-                <span style={{ color: TEXT }}>(msg.data);</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>{'  }'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: TEXT }}>{'};'}</span>
-              </div>
-            </TerminalWindow>
-          </div>
-        </div>
-      </section>
-
-      {/* Protocol Docs */}
-      <section id="docs" style={sectionStyle}>
-        <div style={container}>
-          <h2 style={sectionHeading}>Simple WebSocket Protocol</h2>
-          <p style={sectionSub}>
-            A clean message-based protocol. JSON in, JSON out.
-          </p>
+          {/* Code example */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
-              gap: 32,
+              gap: 48,
+              alignItems: 'start',
             }}
           >
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: ACCENT, marginBottom: 20, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Client Messages
+              <h3
+                style={{
+                  fontSize: 24,
+                  fontWeight: 600,
+                  color: TEXT,
+                  marginBottom: 12,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Simple WebSocket API
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {['auth', 'terminal:create', 'terminal:input', 'terminal:resize', 'terminal:kill', 'terminal:list'].map(
-                  (msg) => (
-                    <div
-                      key={msg}
+              <p style={{ fontSize: 15, color: TEXT_SEC, lineHeight: 1.6, marginBottom: 24 }}>
+                Authenticate, create a terminal, send input, receive output. Four messages to get a working terminal
+                client.
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                {[
+                  { msg: 'auth', desc: 'Authenticate with your token' },
+                  { msg: 'terminal:create', desc: 'Spawn a new terminal session' },
+                  { msg: 'terminal:input', desc: 'Send keystrokes' },
+                  { msg: 'terminal:output', desc: 'Receive terminal data' },
+                ].map((item) => (
+                  <div key={item.msg} style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                    <code
                       style={{
-                        background: CARD_BG,
-                        border: `1px solid ${CARD_BORDER}`,
-                        borderRadius: 8,
-                        padding: '10px 16px',
-                        fontFamily: "'SF Mono', 'Fira Code', monospace",
-                        fontSize: 14,
-                        color: '#fff',
+                        fontFamily: "'Berkeley Mono', 'SF Mono', monospace",
+                        fontSize: 13,
+                        color: TEXT,
+                        background: SURFACE,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 6,
+                        padding: '4px 10px',
+                        whiteSpace: 'nowrap',
                       }}
                     >
-                      {msg}
-                    </div>
-                  )
-                )}
+                      {item.msg}
+                    </code>
+                    <span style={{ fontSize: 14, color: TEXT_SEC }}>{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <CodeBlock title="client.ts">
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#c586c0' }}>const</span>
+                <span style={{ color: '#edecec' }}> ws </span>
+                <span style={{ color: '#c586c0' }}>=</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#c586c0' }}>new</span>
+                <span style={{ color: '#dcdcaa' }}> WebSocket</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#ce9178' }}>&apos;ws://localhost:3456/ws&apos;</span>
+                <span style={{ color: '#edecec' }}>);</span>
+              </div>
+              <div style={{ height: 4 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#6a9955' }}>{'// Authenticate'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>ws.</span>
+                <span style={{ color: '#dcdcaa' }}>send</span>
+                <span style={{ color: '#edecec' }}>(JSON.</span>
+                <span style={{ color: '#dcdcaa' }}>stringify</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#edecec' }}>{'{ '}</span>
+                <span style={{ color: '#9cdcfe' }}>type</span>
+                <span style={{ color: '#edecec' }}>: </span>
+                <span style={{ color: '#ce9178' }}>&apos;auth&apos;</span>
+                <span style={{ color: '#edecec' }}>, </span>
+                <span style={{ color: '#9cdcfe' }}>token</span>
+                <span style={{ color: '#edecec' }}>: </span>
+                <span style={{ color: '#ce9178' }}>&apos;your-token&apos;</span>
+                <span style={{ color: '#edecec' }}>{' }'}</span>
+                <span style={{ color: '#edecec' }}>));</span>
+              </div>
+              <div style={{ height: 4 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#6a9955' }}>{'// Create a terminal'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>ws.</span>
+                <span style={{ color: '#dcdcaa' }}>send</span>
+                <span style={{ color: '#edecec' }}>(JSON.</span>
+                <span style={{ color: '#dcdcaa' }}>stringify</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#edecec' }}>{'{ '}</span>
+                <span style={{ color: '#9cdcfe' }}>type</span>
+                <span style={{ color: '#edecec' }}>: </span>
+                <span style={{ color: '#ce9178' }}>&apos;terminal:create&apos;</span>
+                <span style={{ color: '#edecec' }}>{' }'}</span>
+                <span style={{ color: '#edecec' }}>));</span>
+              </div>
+              <div style={{ height: 4 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#6a9955' }}>{'// Handle output'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>ws.</span>
+                <span style={{ color: '#9cdcfe' }}>onmessage</span>
+                <span style={{ color: '#edecec' }}> = (</span>
+                <span style={{ color: '#9cdcfe' }}>e</span>
+                <span style={{ color: '#edecec' }}>) </span>
+                <span style={{ color: '#c586c0' }}>=&gt;</span>
+                <span style={{ color: '#edecec' }}> {'{'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>const</span>
+                <span style={{ color: '#edecec' }}> msg = JSON.</span>
+                <span style={{ color: '#dcdcaa' }}>parse</span>
+                <span style={{ color: '#edecec' }}>(e.data);</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>if</span>
+                <span style={{ color: '#edecec' }}> (msg.type === </span>
+                <span style={{ color: '#ce9178' }}>&apos;terminal:output&apos;</span>
+                <span style={{ color: '#edecec' }}>) {'{'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'    '}terminal.</span>
+                <span style={{ color: '#dcdcaa' }}>write</span>
+                <span style={{ color: '#edecec' }}>(msg.data);</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  }'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'};'}</span>
+              </div>
+            </CodeBlock>
+          </div>
+        </div>
+      </section>
+
+      {/* Protocol reference */}
+      <section id="protocol" style={sectionStyle}>
+        <div style={container}>
+          <h2 style={sectionHeading}>Full protocol reference</h2>
+          <p style={sectionSub}>Every message type, at a glance.</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 48,
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: TEXT_MUTED,
+                  marginBottom: 16,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                }}
+              >
+                Client &rarr; Server
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  'auth',
+                  'terminal:create',
+                  'terminal:input',
+                  'terminal:resize',
+                  'terminal:kill',
+                  'terminal:list',
+                ].map((msg) => (
+                  <div
+                    key={msg}
+                    style={{
+                      background: SURFACE,
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      fontFamily: "'Berkeley Mono', 'SF Mono', 'Fira Code', monospace",
+                      fontSize: 13,
+                      color: TEXT,
+                    }}
+                  >
+                    {msg}
+                  </div>
+                ))}
               </div>
             </div>
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: ACCENT, marginBottom: 20, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Server Messages
+              <h3
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: TEXT_MUTED,
+                  marginBottom: 16,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                }}
+              >
+                Server &rarr; Client
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {['auth:ok', 'auth:fail', 'terminal:created', 'terminal:output', 'terminal:exited', 'terminal:list', 'error'].map(
-                  (msg) => (
-                    <div
-                      key={msg}
-                      style={{
-                        background: CARD_BG,
-                        border: `1px solid ${CARD_BORDER}`,
-                        borderRadius: 8,
-                        padding: '10px 16px',
-                        fontFamily: "'SF Mono', 'Fira Code', monospace",
-                        fontSize: 14,
-                        color: '#fff',
-                      }}
-                    >
-                      {msg}
-                    </div>
-                  )
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  'auth:ok',
+                  'auth:fail',
+                  'terminal:created',
+                  'terminal:output',
+                  'terminal:exited',
+                  'terminal:list',
+                  'error',
+                ].map((msg) => (
+                  <div
+                    key={msg}
+                    style={{
+                      background: SURFACE,
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      fontFamily: "'Berkeley Mono', 'SF Mono', 'Fira Code', monospace",
+                      fontSize: 13,
+                      color: TEXT,
+                    }}
+                  >
+                    {msg}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Showcase */}
-      <section id="showcase" style={sectionStyle}>
-        <div style={{ ...container, textAlign: 'center' }}>
-          <h2 style={{ ...sectionHeading, marginBottom: 16 }}>AI Showcase</h2>
-          <p
+      {/* CTA */}
+      <section
+        style={{
+          paddingTop: 120,
+          paddingBottom: 140,
+        }}
+      >
+        <div
+          style={{
+            ...container,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <h2
             style={{
-              fontSize: 17,
-              color: TEXT_DIM,
-              maxWidth: 560,
-              margin: '0 auto 40px',
-              lineHeight: 1.6,
-            }}
-          >
-            See GPT 5.1 mini generate a terminal UI in real-time that connects to your local walkie-talkie server.
-          </p>
-          <a
-            href="/showcase"
-            style={{
-              display: 'inline-block',
-              background: ACCENT,
-              color: '#0a0a0f',
-              padding: '14px 32px',
-              borderRadius: 8,
-              fontSize: 16,
+              fontSize: 52,
               fontWeight: 600,
-              textDecoration: 'none',
-              transition: 'opacity 0.2s',
+              color: TEXT,
+              letterSpacing: '-0.04em',
+              lineHeight: 1.1,
+              marginBottom: 20,
+              maxWidth: 600,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
-            Try the AI Showcase &rarr;
+            One command. Real terminal. Any device.
+          </h2>
+          <p style={{ fontSize: 17, color: TEXT_SEC, marginBottom: 40, maxWidth: 400, lineHeight: 1.6 }}>
+            Open source, MIT licensed. Start building in seconds.
+          </p>
+          <div
+            style={{
+              background: BG_CODE,
+              borderRadius: 12,
+              padding: '18px 32px',
+              fontFamily: "'Berkeley Mono', 'SF Mono', monospace",
+              fontSize: 16,
+              color: '#edecec',
+              border: `1px solid rgba(237, 236, 236, 0.08)`,
+              userSelect: 'all',
+              cursor: 'text',
+              marginBottom: 24,
+            }}
+          >
+            <span style={{ color: 'rgba(237, 236, 236, 0.35)' }}>$ </span>
+            npx @vochsel/walkie-talkie@latest --open
+          </div>
+          <a
+            href="https://github.com/vochsel/walkie-talkie"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 14,
+              color: TEXT_SEC,
+              textDecoration: 'none',
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_SEC)}
+          >
+            View on GitHub &rarr;
           </a>
         </div>
       </section>
@@ -613,8 +726,7 @@ export default function Page() {
       {/* Footer */}
       <footer
         style={{
-          borderTop: `1px solid ${CARD_BORDER}`,
-          marginTop: 80,
+          borderTop: `1px solid ${BORDER}`,
           padding: '40px 0',
         }}
       >
@@ -628,24 +740,22 @@ export default function Page() {
             gap: 16,
           }}
         >
-          <p style={{ margin: 0, fontSize: 14, color: TEXT_DIM }}>
-            Built with{' '}
-            <span style={{ color: TEXT }}>node-pty</span>,{' '}
-            <span style={{ color: TEXT }}>xterm.js</span>, and{' '}
-            <span style={{ color: TEXT }}>WebSockets</span>
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: TEXT, letterSpacing: '-0.01em' }}>walkie-talkie</span>
+            <span style={{ fontSize: 13, color: TEXT_MUTED }}>Remote terminal access</span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
             <a
               href="https://github.com/vochsel/walkie-talkie"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ fontSize: 14, color: TEXT_DIM, textDecoration: 'none', transition: 'color 0.2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_DIM)}
+              style={{ fontSize: 13, color: TEXT_SEC, textDecoration: 'none', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_SEC)}
             >
               GitHub
             </a>
-            <span style={{ fontSize: 14, color: TEXT_DIM }}>MIT License</span>
+            <span style={{ fontSize: 13, color: TEXT_MUTED }}>MIT License</span>
           </div>
         </div>
       </footer>

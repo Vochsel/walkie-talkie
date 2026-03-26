@@ -1,45 +1,65 @@
 :root {
-  --bg: #0a0a0f;
-  --bg-card: #111118;
-  --bg-code: #0d0d14;
-  --border: #1e1e2e;
-  --text: #e4e4ef;
-  --text-dim: #8888a0;
-  --text-muted: #555566;
-  --accent: #00d4aa;
-  --accent-dim: rgba(0, 212, 170, 0.15);
-  --accent-glow: rgba(0, 212, 170, 0.3);
+  --bg: #f7f7f4;
+  --bg-secondary: #efefe9;
+  --bg-code: #14120b;
+  --border: rgba(38, 37, 30, 0.08);
+  --border-hover: rgba(38, 37, 30, 0.16);
+  --text: #26251e;
+  --text-secondary: rgba(38, 37, 30, 0.55);
+  --text-muted: rgba(38, 37, 30, 0.35);
+  --surface: rgba(38, 37, 30, 0.03);
+  --surface-hover: rgba(38, 37, 30, 0.06);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; text-decoration-color: var(--text-muted); text-underline-offset: 3px; }
+
+::selection {
+  background: rgba(38, 37, 30, 0.12);
+}
 
 code {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
-  background: var(--bg-code);
+  font-family: 'Berkeley Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 2px 6px;
-  font-size: 0.9em;
+  font-size: 0.88em;
 }
 
 pre {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+  font-family: 'Berkeley Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
   background: var(--bg-code);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 20px;
+  border-radius: 10px;
+  padding: 20px 24px;
   overflow-x: auto;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: #edecec;
 }
