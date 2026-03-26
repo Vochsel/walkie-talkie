@@ -28,6 +28,11 @@ export function useWalkieTalkie() {
       if (state === 'connected') {
         setIsResuming(client.isResuming);
       } else if (state === 'error' || state === 'disconnected') {
+        // If resume failed, remove the stale session so we don't retry it
+        if (state === 'error' && client.isResuming) {
+          const serverUrl = client.getServerUrl();
+          if (serverUrl) removeConnection(serverUrl);
+        }
         setIsResuming(false);
       }
 

@@ -1,4 +1,7 @@
 import { randomBytes, randomUUID } from 'crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { TOKEN_TTL_MS } from '@walkie-talkie/shared';
 
 interface MagicToken {
@@ -8,14 +11,42 @@ interface MagicToken {
   used: boolean;
 }
 
+const SESSION_FILE = join(homedir(), '.walkie-talkie', 'sessions.json');
+
 export class TokenManager {
   private tokens: Map<string, MagicToken> = new Map();
   private activeSessions: Map<string, { tokenValue: string; createdAt: number }> = new Map();
   private gcInterval: ReturnType<typeof setInterval>;
 
   constructor() {
+    this.loadSessions();
     // Garbage-collect expired tokens every 60s
     this.gcInterval = setInterval(() => this.gc(), 60_000);
+  }
+
+  private loadSessions(): void {
+    try {
+      const data = readFileSync(SESSION_FILE, 'utf-8');
+      const entries: [string, { tokenValue: string; createdAt: number }][] = JSON.parse(data);
+      // Only restore sessions less than 24 hours old
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      for (const [id, session] of entries) {
+        if (session.createdAt > cutoff) {
+          this.activeSessions.set(id, session);
+        }
+      }
+    } catch {
+      // No file or invalid — start fresh
+    }
+  }
+
+  private saveSessions(): void {
+    try {
+      mkdirSync(join(homedir(), '.walkie-talkie'), { recursive: true });
+      writeFileSync(SESSION_FILE, JSON.stringify([...this.activeSessions.entries()]));
+    } catch {
+      // Best-effort
+    }
   }
 
   generate(ttlMs: number = TOKEN_TTL_MS): MagicToken {
@@ -55,6 +86,7 @@ export class TokenManager {
       tokenValue: value,
       createdAt: Date.now(),
     });
+    this.saveSessions();
 
     return sessionId;
   }
@@ -65,11 +97,13 @@ export class TokenManager {
 
   revokeSession(sessionId: string): void {
     this.activeSessions.delete(sessionId);
+    this.saveSessions();
   }
 
   revokeAll(): void {
     this.tokens.clear();
     this.activeSessions.clear();
+    this.saveSessions();
   }
 
   getActiveToken(): MagicToken | null {
