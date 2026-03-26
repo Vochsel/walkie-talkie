@@ -1,0 +1,25 @@
+{
+  "name": "walkie-talkie",
+  "private": true,
+  "scripts": {
+    "dev:service": "pnpm --filter @walkie-talkie/service dev",
+    "dev:web": "pnpm --filter @walkie-talkie/web dev",
+    "dev": "concurrently \"pnpm dev:service\" \"pnpm dev:web\"",
+    "build:shared": "pnpm --filter @walkie-talkie/shared build",
+    "build:service": "pnpm --filter @walkie-talkie/service build",
+    "build:web": "pnpm --filter @walkie-talkie/web build",
+    "build": "pnpm build:shared && concurrently \"pnpm build:service\" \"pnpm build:web\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "node-pty",
+      "sharp",
+      "@electron/rebuild"
+    ]
+  }
+}

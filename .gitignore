@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+.env
+.env.local
+
+# Electron
+release/
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.exe
+
+# OS
+.DS_Store
+Thumbs.db
