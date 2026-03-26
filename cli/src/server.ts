@@ -126,11 +126,15 @@ export function createServer(port: number = DEFAULT_PORT) {
       switch (msg.type) {
         case 'terminal:create': {
           const id = randomUUID();
-          const sess = new TerminalSession(id, msg.cols, msg.rows, msg.shell);
-          terminals.set(id, sess);
-          sess.onData((data) => send(ws, { type: 'terminal:output', terminalId: id, data }));
-          sess.onExit((exitCode) => { send(ws, { type: 'terminal:exited', terminalId: id, exitCode }); terminals.delete(id); });
-          send(ws, { type: 'terminal:created', terminal: sess.getInfo() });
+          try {
+            const sess = new TerminalSession(id, msg.cols, msg.rows, msg.shell);
+            terminals.set(id, sess);
+            sess.onData((data) => send(ws, { type: 'terminal:output', terminalId: id, data }));
+            sess.onExit((exitCode) => { send(ws, { type: 'terminal:exited', terminalId: id, exitCode }); terminals.delete(id); });
+            send(ws, { type: 'terminal:created', terminal: sess.getInfo() });
+          } catch (err: any) {
+            send(ws, { type: 'error', message: `Failed to spawn terminal: ${err.message}`, code: 'spawn_failed' });
+          }
           break;
         }
         case 'terminal:input': terminals.get(msg.terminalId)?.write(msg.data); break;
