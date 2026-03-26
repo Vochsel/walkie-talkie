@@ -8,19 +8,40 @@ import { usePersistedRef, usePersistedState } from '@/hooks/usePersistedState';
 import { loadState, saveState } from '@/lib/storage';
 
 // ── Block types ─────────────────────────────────────────────────────
-type BlockType = 'grass' | 'dirt' | 'stone' | 'wood' | 'leaves' | 'sand' | 'glass' | 'terminal';
+type BlockType =
+  | 'grass' | 'dirt' | 'stone' | 'cobblestone' | 'planks' | 'wood' | 'bricks'
+  | 'sand' | 'gravel' | 'glass' | 'leaves' | 'sponge' | 'bookshelf'
+  | 'tnt' | 'obsidian' | 'mossy_cobblestone' | 'bedrock'
+  | 'coal_ore' | 'iron_ore' | 'gold_ore' | 'diamond_ore' | 'redstone_ore'
+  | 'iron_block' | 'gold_block' | 'diamond_block'
+  | 'terminal';
 
-const HOTBAR_BLOCKS: BlockType[] = ['grass', 'dirt', 'stone', 'wood', 'leaves', 'sand', 'glass', 'terminal'];
+const HOTBAR_BLOCKS: BlockType[] = [
+  // Row 1: terrain & building
+  'grass', 'dirt', 'stone', 'cobblestone', 'planks', 'wood', 'bricks', 'sand', 'glass', 'gravel', 'leaves', 'sponge', 'bookshelf',
+  // Row 2: special & underground
+  'tnt', 'obsidian', 'mossy_cobblestone', 'bedrock', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'redstone_ore', 'iron_block', 'gold_block', 'diamond_block', 'terminal',
+];
+
+const HOTBAR_ROW_SIZE = 13;
 
 const BLOCK_LABELS: Record<BlockType, string> = {
-  grass: 'Grass', dirt: 'Dirt', stone: 'Stone', wood: 'Wood',
-  leaves: 'Leaves', sand: 'Sand', glass: 'Glass', terminal: 'Terminal',
+  grass: 'Grass', dirt: 'Dirt', stone: 'Stone', cobblestone: 'Cobble', planks: 'Planks',
+  wood: 'Wood', bricks: 'Bricks', sand: 'Sand', gravel: 'Gravel', glass: 'Glass',
+  leaves: 'Leaves', sponge: 'Sponge', bookshelf: 'Books', tnt: 'TNT', obsidian: 'Obsidian',
+  mossy_cobblestone: 'Mossy', bedrock: 'Bedrock', coal_ore: 'Coal', iron_ore: 'Iron Ore',
+  gold_ore: 'Gold Ore', diamond_ore: 'Diamond', redstone_ore: 'Redstone',
+  iron_block: 'Iron', gold_block: 'Gold', diamond_block: 'Diamond B.', terminal: 'Terminal',
 };
 
-// Hotbar preview colors (for the UI squares)
 const BLOCK_PREVIEW: Record<BlockType, string> = {
-  grass: '#5aad4e', dirt: '#8b6b4a', stone: '#888888', wood: '#6b4226',
-  leaves: '#2d6b1e', sand: '#dbc67b', glass: '#aaddff', terminal: '#00d4aa',
+  grass: '#5aad4e', dirt: '#8b6b4a', stone: '#888888', cobblestone: '#7a7a7a',
+  planks: '#b89b60', wood: '#6b4226', bricks: '#8b4d3b', sand: '#dbc67b',
+  gravel: '#8a8078', glass: '#aaddff', leaves: '#2d6b1e', sponge: '#c3c33e',
+  bookshelf: '#6b4226', tnt: '#cc3333', obsidian: '#1a0a2e', mossy_cobblestone: '#5a7a5a',
+  bedrock: '#3a3a3a', coal_ore: '#444444', iron_ore: '#998877', gold_ore: '#aa8833',
+  diamond_ore: '#55bbcc', redstone_ore: '#aa3333', iron_block: '#c8c8c8',
+  gold_block: '#ddaa22', diamond_block: '#55ddcc', terminal: '#00d4aa',
 };
 
 // ── Texture atlas mapping ───────────────────────────────────────────
@@ -33,14 +54,32 @@ type FaceMap = [TileCoord, TileCoord, TileCoord, TileCoord, TileCoord, TileCoord
 function allFaces(t: TileCoord): FaceMap { return [t, t, t, t, t, t]; }
 
 const BLOCK_FACES: Record<BlockType, FaceMap> = {
-  grass:    [[3,0],[3,0],[0,0],[2,0],[3,0],[3,0]],  // side, side, top(gray→tint), bottom(dirt), side, side
-  dirt:     allFaces([2,0]),
-  stone:    allFaces([1,0]),
-  wood:     [[4,1],[4,1],[5,1],[5,1],[4,1],[4,1]],  // bark side, log top/bottom
-  leaves:   allFaces([4,3]),
-  sand:     allFaces([2,1]),
-  glass:    allFaces([1,3]),
-  terminal: allFaces([0,0]),  // not used — terminal uses solid color
+  grass:              [[3,0],[3,0],[0,0],[2,0],[3,0],[3,0]],
+  dirt:               allFaces([2,0]),
+  stone:              allFaces([1,0]),
+  cobblestone:        allFaces([0,1]),
+  planks:             allFaces([4,0]),
+  wood:               [[4,1],[4,1],[5,1],[5,1],[4,1],[4,1]],
+  bricks:             allFaces([7,0]),
+  sand:               allFaces([2,1]),
+  gravel:             allFaces([3,1]),
+  glass:              allFaces([1,3]),
+  leaves:             allFaces([4,3]),
+  sponge:             allFaces([0,3]),
+  bookshelf:          [[3,2],[3,2],[4,0],[4,0],[3,2],[3,2]],
+  tnt:                [[8,0],[8,0],[9,0],[10,0],[8,0],[8,0]],
+  obsidian:           allFaces([5,2]),
+  mossy_cobblestone:  allFaces([4,2]),
+  bedrock:            allFaces([1,1]),
+  coal_ore:           allFaces([2,2]),
+  iron_ore:           allFaces([1,2]),
+  gold_ore:           allFaces([0,2]),
+  diamond_ore:        allFaces([2,3]),
+  redstone_ore:       allFaces([3,3]),
+  iron_block:         allFaces([6,1]),
+  gold_block:         allFaces([7,1]),
+  diamond_block:      allFaces([8,1]),
+  terminal:           allFaces([0,0]),
 };
 
 // Create a BoxGeometry with UVs mapped to atlas tiles per face
@@ -69,11 +108,9 @@ function createBlockMaterial(
   blockType: BlockType,
 ): THREE.Material | THREE.Material[] {
   if (blockType === 'grass') {
-    // Grass top is gray in atlas — tint green. Sides already have a green strip.
-    // Tint sides lightly to match biome color
     const side = new THREE.MeshLambertMaterial({ map: texture, color: 0x88cc88 });
     const top = new THREE.MeshLambertMaterial({ map: texture, color: 0x59a833 });
-    const bottom = new THREE.MeshLambertMaterial({ map: texture }); // dirt, no tint
+    const bottom = new THREE.MeshLambertMaterial({ map: texture });
     return [side, side, top, bottom, side, side];
   }
   if (blockType === 'leaves') {
@@ -91,19 +128,67 @@ function createBlockMaterial(
       color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.45,
     });
   }
+  if (blockType === 'redstone_ore') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, emissive: 0x330000, emissiveIntensity: 0.15,
+    });
+  }
+  if (blockType === 'diamond_ore') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, emissive: 0x002233, emissiveIntensity: 0.1,
+    });
+  }
+  if (blockType === 'diamond_block') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, emissive: 0x114444, emissiveIntensity: 0.2,
+    });
+  }
+  if (blockType === 'gold_block') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, emissive: 0x221100, emissiveIntensity: 0.15,
+    });
+  }
+  if (blockType === 'tnt') {
+    const side = new THREE.MeshLambertMaterial({ map: texture });
+    const top = new THREE.MeshLambertMaterial({ map: texture });
+    const bottom = new THREE.MeshLambertMaterial({ map: texture });
+    return [side, side, top, bottom, side, side];
+  }
+  if (blockType === 'bookshelf') {
+    const side = new THREE.MeshLambertMaterial({ map: texture });
+    const cap = new THREE.MeshLambertMaterial({ map: texture });
+    return [side, side, cap, cap, side, side];
+  }
   return new THREE.MeshLambertMaterial({ map: texture });
 }
 
 const WORLD_SIZE = 32;
+const UNDERGROUND_DEPTH = -16; // bedrock level
 
-// ── Physics constants ───────────────────────────────────────────────
-const GRAVITY = -25;
-const JUMP_VELOCITY = 9;
-const PLAYER_HEIGHT = 1.62;   // eye height
-const PLAYER_WIDTH = 0.6;     // hitbox width
+// ── Physics constants (Minecraft-accurate) ──────────────────────────
+const GRAVITY = -32;            // ~0.08 blocks/tick² × 20² ticks/s²
+const JUMP_VELOCITY = 8.95;    // ~0.42 blocks/tick × 20 → 1.25 block jump
+const MAX_FALL_SPEED = -78.4;  // terminal velocity ~3.92 blocks/tick × 20
+
+const PLAYER_WIDTH = 0.6;      // hitbox width (same standing & crouching)
+
+// Standing dimensions
+const PLAYER_EYE_HEIGHT = 1.62;
 const PLAYER_BODY_HEIGHT = 1.8;
-const MOVE_SPEED = 5.5;
-const MAX_FALL_SPEED = -40;
+
+// Crouching dimensions
+const CROUCH_EYE_HEIGHT = 1.27;
+const CROUCH_BODY_HEIGHT = 1.5;
+
+// Movement speeds (blocks/second)
+const WALK_SPEED = 4.317;
+const SPRINT_SPEED = 5.612;    // 1.3× walk
+const SNEAK_SPEED = 1.31;      // ~0.3× walk
+
+// Camera FOV
+const BASE_FOV = 70;
+const SPRINT_FOV = 80;
+const FOV_LERP_SPEED = 8;      // how fast FOV transitions
 
 // ── Seeded RNG ──────────────────────────────────────────────────────
 function mulberry32(seed: number) {
@@ -220,7 +305,6 @@ function generateWorld(): VoxelWorld {
   for (let x = 0; x < WORLD_SIZE; x++) {
     heightMap[x] = [];
     for (let z = 0; z < WORLD_SIZE; z++) {
-      // Simple rolling hills
       const h = Math.floor(
         2 + Math.sin(x * 0.15) * 1.5 + Math.cos(z * 0.12) * 1.5 +
         Math.sin((x + z) * 0.08) * 2
@@ -229,26 +313,158 @@ function generateWorld(): VoxelWorld {
     }
   }
 
+  // ── Fill terrain: bedrock → stone → dirt → grass ──────────────────
   for (let x = 0; x < WORLD_SIZE; x++) {
     for (let z = 0; z < WORLD_SIZE; z++) {
       const h = heightMap[x][z];
-      // Bedrock / dirt layers
-      for (let y = 0; y < h; y++) {
-        world.set(x, y, z, y === h - 1 ? 'grass' : (y < h - 3 ? 'stone' : 'dirt'));
+
+      // Bedrock floor
+      world.set(x, UNDERGROUND_DEPTH, z, 'bedrock');
+      // Occasionally a second bedrock layer for jaggedness
+      if (rng() < 0.5) world.set(x, UNDERGROUND_DEPTH + 1, z, 'bedrock');
+
+      // Stone fills from above bedrock to surface - 4
+      for (let y = UNDERGROUND_DEPTH + 2; y < h - 3; y++) {
+        world.set(x, y, z, 'stone');
       }
 
-      // Scatter stones on surface
-      if (rng() < 0.04) {
-        world.set(x, h, z, 'stone');
+      // Dirt layers
+      for (let y = Math.max(UNDERGROUND_DEPTH + 2, h - 3); y < h; y++) {
+        world.set(x, y, z, 'dirt');
+      }
+
+      // Grass on top
+      world.set(x, h, z, 'grass');
+    }
+  }
+
+  // ── Ore veins ─────────────────────────────────────────────────────
+  function placeOreVein(oreType: BlockType, cx: number, cy: number, cz: number, size: number) {
+    for (let i = 0; i < size; i++) {
+      const ox = cx + Math.floor(rng() * 3) - 1;
+      const oy = cy + Math.floor(rng() * 3) - 1;
+      const oz = cz + Math.floor(rng() * 3) - 1;
+      if (ox < 0 || ox >= WORLD_SIZE || oz < 0 || oz >= WORLD_SIZE) continue;
+      if (world.get(ox, oy, oz) === 'stone') {
+        world.set(ox, oy, oz, oreType);
+      }
+    }
+  }
+
+  // Coal: y = -12 to surface-4, common
+  for (let i = 0; i < 120; i++) {
+    const x = Math.floor(rng() * WORLD_SIZE);
+    const z = Math.floor(rng() * WORLD_SIZE);
+    const y = Math.floor(rng() * (heightMap[x][z] - 4 - (-12))) + (-12);
+    placeOreVein('coal_ore', x, y, z, 4 + Math.floor(rng() * 5));
+  }
+
+  // Iron: y = -15 to -2
+  for (let i = 0; i < 80; i++) {
+    const x = Math.floor(rng() * WORLD_SIZE);
+    const z = Math.floor(rng() * WORLD_SIZE);
+    const y = Math.floor(rng() * 13) + (-15);
+    placeOreVein('iron_ore', x, y, z, 3 + Math.floor(rng() * 4));
+  }
+
+  // Gold: y = -16 to -8, rare
+  for (let i = 0; i < 30; i++) {
+    const x = Math.floor(rng() * WORLD_SIZE);
+    const z = Math.floor(rng() * WORLD_SIZE);
+    const y = Math.floor(rng() * 8) + (-16);
+    placeOreVein('gold_ore', x, y, z, 2 + Math.floor(rng() * 4));
+  }
+
+  // Redstone: y = -16 to -10
+  for (let i = 0; i < 40; i++) {
+    const x = Math.floor(rng() * WORLD_SIZE);
+    const z = Math.floor(rng() * WORLD_SIZE);
+    const y = Math.floor(rng() * 6) + (-16);
+    placeOreVein('redstone_ore', x, y, z, 3 + Math.floor(rng() * 5));
+  }
+
+  // Diamond: y = -16 to -12, very rare
+  for (let i = 0; i < 15; i++) {
+    const x = Math.floor(rng() * WORLD_SIZE);
+    const z = Math.floor(rng() * WORLD_SIZE);
+    const y = Math.floor(rng() * 4) + (-16);
+    placeOreVein('diamond_ore', x, y, z, 2 + Math.floor(rng() * 3));
+  }
+
+  // Gravel pockets underground
+  for (let i = 0; i < 25; i++) {
+    const cx = Math.floor(rng() * WORLD_SIZE);
+    const cz = Math.floor(rng() * WORLD_SIZE);
+    const cy = Math.floor(rng() * 10) + (-12);
+    const size = 3 + Math.floor(rng() * 4);
+    for (let j = 0; j < size * 3; j++) {
+      const gx = cx + Math.floor(rng() * 5) - 2;
+      const gy = cy + Math.floor(rng() * 5) - 2;
+      const gz = cz + Math.floor(rng() * 5) - 2;
+      if (gx >= 0 && gx < WORLD_SIZE && gz >= 0 && gz < WORLD_SIZE) {
+        const b = world.get(gx, gy, gz);
+        if (b === 'stone') world.set(gx, gy, gz, 'gravel');
+      }
+    }
+  }
+
+  // ── Caves (worm carving) ──────────────────────────────────────────
+  for (let c = 0; c < 12; c++) {
+    let cx = Math.floor(rng() * WORLD_SIZE);
+    let cy = Math.floor(rng() * 12) + (-14);
+    let cz = Math.floor(rng() * WORLD_SIZE);
+    let dirX = rng() - 0.5, dirY = (rng() - 0.5) * 0.5, dirZ = rng() - 0.5;
+    const length = 15 + Math.floor(rng() * 25);
+
+    for (let step = 0; step < length; step++) {
+      // Carve a sphere at current position
+      const radius = 1.5 + rng() * 1.5;
+      const r = Math.ceil(radius);
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dz = -r; dz <= r; dz++) {
+            if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+            const bx = Math.floor(cx + dx), by = Math.floor(cy + dy), bz = Math.floor(cz + dz);
+            if (bx < 0 || bx >= WORLD_SIZE || bz < 0 || bz >= WORLD_SIZE) continue;
+            const block = world.get(bx, by, bz);
+            if (block && block !== 'bedrock' && block !== 'grass') {
+              world.delete(bx, by, bz);
+            }
+          }
+        }
+      }
+
+      // Wander
+      dirX += (rng() - 0.5) * 0.4;
+      dirY += (rng() - 0.5) * 0.3;
+      dirZ += (rng() - 0.5) * 0.4;
+      // Keep within bounds and underground
+      cx += dirX;
+      cy += dirY;
+      cz += dirZ;
+      cy = Math.max(UNDERGROUND_DEPTH + 2, Math.min(cy, -1));
+      cx = Math.max(1, Math.min(cx, WORLD_SIZE - 2));
+      cz = Math.max(1, Math.min(cz, WORLD_SIZE - 2));
+    }
+  }
+
+  // ── Surface features ──────────────────────────────────────────────
+  for (let x = 0; x < WORLD_SIZE; x++) {
+    for (let z = 0; z < WORLD_SIZE; z++) {
+      const h = heightMap[x][z];
+
+      // Scatter cobblestone on surface
+      if (rng() < 0.03) {
+        world.set(x, h + 1, z, 'cobblestone');
       }
 
       // Trees
       if (rng() < 0.025) {
         const trunkHeight = 3 + Math.floor(rng() * 3);
-        for (let y = h; y < h + trunkHeight; y++) {
+        for (let y = h + 1; y < h + 1 + trunkHeight; y++) {
           world.set(x, y, z, 'wood');
         }
-        const leafBase = h + trunkHeight - 1;
+        const leafBase = h + 1 + trunkHeight - 1;
         for (let lx = -2; lx <= 2; lx++) {
           for (let lz = -2; lz <= 2; lz++) {
             for (let ly = 0; ly <= 2; ly++) {
@@ -265,14 +481,14 @@ function generateWorld(): VoxelWorld {
         }
       }
 
-      // Small sand patches
+      // Sand patches
       if (rng() < 0.02) {
         for (let dx = -1; dx <= 1; dx++) {
           for (let dz = -1; dz <= 1; dz++) {
             const sx = x + dx, sz = z + dz;
             if (sx >= 0 && sx < WORLD_SIZE && sz >= 0 && sz < WORLD_SIZE && rng() > 0.3) {
               const sh = heightMap[sx]?.[sz] ?? 1;
-              world.set(sx, sh - 1, sz, 'sand');
+              world.set(sx, sh, sz, 'sand');
             }
           }
         }
@@ -580,6 +796,8 @@ export default function MinecraftView({
 
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const onGroundRef = useRef(false);
+  const sprintingRef = useRef(false);
+  const crouchingRef = useRef(false);
   const selectedSlotRef = useRef(0);
   const meshDirtyRef = useRef(false);
 
@@ -634,7 +852,7 @@ export default function MinecraftView({
     scene.background = new THREE.Color(0x87ceeb);
     scene.fog = new THREE.FogExp2(0x87ceeb, 0.018);
 
-    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 120);
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, container.clientWidth / container.clientHeight, 0.1, 120);
     camera.position.copy(playerPosRef.current);
 
     // Lights
@@ -660,7 +878,7 @@ export default function MinecraftView({
     {
       const pos = playerPosRef.current;
       const hw = PLAYER_WIDTH / 2;
-      const bottom = pos.y - PLAYER_HEIGHT;
+      const bottom = pos.y - PLAYER_EYE_HEIGHT;
       const bx = Math.floor(pos.x);
       const bz = Math.floor(pos.z);
       let stuck = false;
@@ -672,12 +890,12 @@ export default function MinecraftView({
           break;
         }
       }
-      if (stuck || pos.y < 0) {
+      if (stuck || pos.y < UNDERGROUND_DEPTH - 5) {
         // Find safe Y: scan upward from current X/Z
         let safeY = 1;
-        for (let y = 0; y < 30; y++) {
+        for (let y = UNDERGROUND_DEPTH; y < 30; y++) {
           if (world.isSolid(bx, y, bz) && !world.isSolid(bx, y + 1, bz) && !world.isSolid(bx, y + 2, bz)) {
-            safeY = y + 1 + PLAYER_HEIGHT;
+            safeY = y + 1 + PLAYER_EYE_HEIGHT;
           }
         }
         pos.set(pos.x, safeY, pos.z);
@@ -732,13 +950,13 @@ export default function MinecraftView({
     const onKeyDown = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
       keysRef.current.add(k);
-      // Prevent page scroll on WASD/space when locked
+      // Prevent page scroll on WASD/space/shift/ctrl when locked
       if (document.pointerLockElement === canvas) {
-        if (['w', 'a', 's', 'd', ' ', 'shift'].includes(k)) e.preventDefault();
+        if (['w', 'a', 's', 'd', ' ', 'shift', 'control'].includes(k)) e.preventDefault();
       }
       // Hotbar selection with number keys
       const num = parseInt(e.key);
-      if (num >= 1 && num <= HOTBAR_BLOCKS.length) {
+      if (num >= 1 && num <= 9) {
         setSelectedSlot(num - 1);
       }
     };
@@ -831,7 +1049,7 @@ export default function MinecraftView({
         if (world.has(placePos.x, placePos.y, placePos.z)) return;
 
         // Player collision check
-        const pBottom = playerPosRef.current.y - PLAYER_HEIGHT;
+        const pBottom = playerPosRef.current.y - PLAYER_EYE_HEIGHT;
         const pTop = pBottom + PLAYER_BODY_HEIGHT;
         const hw = PLAYER_WIDTH / 2;
         if (placePos.x + 1 > playerPosRef.current.x - hw && placePos.x < playerPosRef.current.x + hw &&
@@ -875,53 +1093,119 @@ export default function MinecraftView({
 
       // ── Player physics ────────────────────────────────────────────
       if (document.pointerLockElement === canvas) {
+        const keys = keysRef.current;
+        const vel = velocityRef.current;
+        const pos = playerPosRef.current;
+        const hw = PLAYER_WIDTH / 2;
+
+        // ── Sprint & crouch state ────────────────────────────────────
+        const wantsToSprint = keys.has('control') && keys.has('w') && onGroundRef.current;
+        const wantsToCrouch = keys.has('shift');
+
+        // Can't sprint and crouch at the same time
+        if (wantsToCrouch) {
+          sprintingRef.current = false;
+          crouchingRef.current = true;
+        } else if (wantsToSprint) {
+          sprintingRef.current = true;
+          crouchingRef.current = false;
+        } else {
+          sprintingRef.current = false;
+          // Uncrouch: only if there's room to stand up
+          if (crouchingRef.current) {
+            const testPos = pos.clone();
+            if (!isPlayerColliding(world, testPos, hw, PLAYER_BODY_HEIGHT, PLAYER_EYE_HEIGHT)) {
+              crouchingRef.current = false;
+            }
+            // else stay crouched — not enough headroom
+          }
+        }
+
+        const isCrouching = crouchingRef.current;
+        const isSprinting = sprintingRef.current;
+
+        const currentEyeH = isCrouching ? CROUCH_EYE_HEIGHT : PLAYER_EYE_HEIGHT;
+        const currentBodyH = isCrouching ? CROUCH_BODY_HEIGHT : PLAYER_BODY_HEIGHT;
+
+        // ── Movement speed ───────────────────────────────────────────
+        const speed = isCrouching ? SNEAK_SPEED : (isSprinting ? SPRINT_SPEED : WALK_SPEED);
+
         // Movement input
         const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
         const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
 
         const wishDir = new THREE.Vector3(0, 0, 0);
-        const keys = keysRef.current;
         if (keys.has('w')) wishDir.add(forward);
         if (keys.has('s')) wishDir.sub(forward);
         if (keys.has('a')) wishDir.sub(right);
         if (keys.has('d')) wishDir.add(right);
         if (wishDir.lengthSq() > 0) wishDir.normalize();
 
-        velocityRef.current.x = wishDir.x * MOVE_SPEED;
-        velocityRef.current.z = wishDir.z * MOVE_SPEED;
+        // Stop sprinting if not moving forward
+        if (isSprinting && !keys.has('w')) sprintingRef.current = false;
+
+        vel.x = wishDir.x * speed;
+        vel.z = wishDir.z * speed;
 
         // Jump
-        if (keys.has(' ') && onGroundRef.current) {
-          velocityRef.current.y = JUMP_VELOCITY;
+        if (keys.has(' ') && onGroundRef.current && !isCrouching) {
+          vel.y = JUMP_VELOCITY;
           onGroundRef.current = false;
         }
 
         // Gravity
-        velocityRef.current.y += GRAVITY * dt;
-        if (velocityRef.current.y < MAX_FALL_SPEED) velocityRef.current.y = MAX_FALL_SPEED;
+        vel.y += GRAVITY * dt;
+        if (vel.y < MAX_FALL_SPEED) vel.y = MAX_FALL_SPEED;
 
-        const vel = velocityRef.current;
-        const pos = playerPosRef.current;
-        const hw = PLAYER_WIDTH / 2;
+        // ── Crouch edge-stop ─────────────────────────────────────────
+        // When crouching on the ground, prevent walking off edges
+        if (isCrouching && onGroundRef.current && (vel.x !== 0 || vel.z !== 0)) {
+          const testX = pos.x + vel.x * dt;
+          const testZ = pos.z + vel.z * dt;
+          const feetY = pos.y - currentEyeH;
+          // Check if any foot corner would be over empty space
+          let wouldFall = true;
+          for (const dx of [-hw + EPSILON, 0, hw - EPSILON]) {
+            for (const dz of [-hw + EPSILON, 0, hw - EPSILON]) {
+              if (world.isSolid(Math.floor(testX + dx), Math.floor(feetY - EPSILON * 2), Math.floor(testZ + dz))) {
+                wouldFall = false;
+              }
+            }
+          }
+          if (wouldFall) {
+            vel.x = 0;
+            vel.z = 0;
+          }
+        }
 
         // Resolve Y first (gravity/jump), then X, then Z
-        const yResult = resolveY(world, pos, vel, dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        const yResult = resolveY(world, pos, vel, dt, hw, currentBodyH, currentEyeH);
         pos.y = yResult.y;
-        pos.x = resolveXZ(world, pos, vel, 'x', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.z = resolveXZ(world, pos, vel, 'z', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        pos.x = resolveXZ(world, pos, vel, 'x', dt, hw, currentBodyH, currentEyeH);
+        pos.z = resolveXZ(world, pos, vel, 'z', dt, hw, currentBodyH, currentEyeH);
 
         // Ground detection
-        onGroundRef.current = yResult.grounded || isOnGround(world, pos, hw, PLAYER_HEIGHT);
+        onGroundRef.current = yResult.grounded || isOnGround(world, pos, hw, currentEyeH);
 
         // Safety: don't fall into the void
-        if (pos.y < -10) {
+        if (pos.y < UNDERGROUND_DEPTH - 10) {
           pos.set(WORLD_SIZE / 2, 15, WORLD_SIZE / 2);
           vel.set(0, 0, 0);
         }
+
+        // ── FOV transition ───────────────────────────────────────────
+        const targetFov = isSprinting ? SPRINT_FOV : BASE_FOV;
+        camera.fov += (targetFov - camera.fov) * Math.min(1, FOV_LERP_SPEED * dt);
+        camera.updateProjectionMatrix();
       }
 
       // Update camera
       camera.position.copy(playerPosRef.current);
+      // Smooth eye height for crouch transition
+      const targetEyeOffset = crouchingRef.current
+        ? PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT
+        : 0;
+      camera.position.y -= targetEyeOffset;
       camera.quaternion.setFromEuler(new THREE.Euler(pitchRef.current, yawRef.current, 0, 'YXZ'));
 
       // Block highlight
@@ -1031,7 +1315,7 @@ export default function MinecraftView({
                 if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
                 const px = cx + dx, pz = cz + dz;
                 if (px < 0 || px >= WORLD_SIZE || pz < 0 || pz >= WORLD_SIZE) continue;
-                for (let y = 10; y >= 0; y--) {
+                for (let y = 10; y >= UNDERGROUND_DEPTH; y--) {
                   if (world.has(px, y, pz) && !world.has(px, y + 1, pz)) {
                     const pos = new THREE.Vector3(px, y + 1, pz);
                     world.userSet(px, y + 1, pz, 'terminal');
@@ -1070,23 +1354,30 @@ export default function MinecraftView({
       {/* Hotbar */}
       {isLocked && (
         <div style={styles.hotbar}>
-          {HOTBAR_BLOCKS.map((type, i) => (
-            <div
-              key={type}
-              style={{
-                ...styles.hotbarSlot,
-                ...(i === selectedSlot ? styles.hotbarSlotActive : {}),
-              }}
-              onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(i); }}
-            >
-              <div style={{
-                ...styles.hotbarBlock,
-                background: BLOCK_PREVIEW[type],
-                ...(type === 'glass' ? { opacity: 0.5 } : {}),
-                ...(type === 'terminal' ? { boxShadow: '0 0 8px #00d4aa' } : {}),
-              }} />
-              <span style={styles.hotbarLabel}>{BLOCK_LABELS[type]}</span>
-              <span style={styles.hotbarKey}>{i + 1}</span>
+          {[0, 1].map((row) => (
+            <div key={row} style={styles.hotbarRow}>
+              {HOTBAR_BLOCKS.slice(row * HOTBAR_ROW_SIZE, (row + 1) * HOTBAR_ROW_SIZE).map((type, i) => {
+                const idx = row * HOTBAR_ROW_SIZE + i;
+                return (
+                  <div
+                    key={type}
+                    style={{
+                      ...styles.hotbarSlot,
+                      ...(idx === selectedSlot ? styles.hotbarSlotActive : {}),
+                    }}
+                    onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(idx); }}
+                  >
+                    <div style={{
+                      ...styles.hotbarBlock,
+                      background: BLOCK_PREVIEW[type],
+                      ...(type === 'glass' ? { opacity: 0.5 } : {}),
+                      ...(type === 'terminal' ? { boxShadow: '0 0 6px #00d4aa' } : {}),
+                    }} />
+                    <span style={styles.hotbarLabel}>{BLOCK_LABELS[type]}</span>
+                    {idx < 9 && <span style={styles.hotbarKey}>{idx + 1}</span>}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -1100,9 +1391,9 @@ export default function MinecraftView({
             <div style={styles.instructionsText}>Click to start</div>
             <div style={styles.instructionsKeys}>
               <span><b>WASD</b> move &nbsp; <b>Space</b> jump &nbsp; <b>Mouse</b> look</span>
-              <span><b>Left click</b> break block &nbsp; <b>Right click</b> place block</span>
-              <span><b>Right click terminal</b> to open &nbsp; <b>1-8</b> / <b>scroll</b> select block</span>
-              <span><b>ESC</b> release cursor</span>
+              <span><b>Ctrl</b> sprint &nbsp; <b>Shift</b> sneak (edge-safe)</span>
+              <span><b>Left click</b> break &nbsp; <b>Right click</b> place &nbsp; <b>Right click terminal</b> open</span>
+              <span><b>1-9</b> / <b>scroll</b> select block &nbsp; <b>ESC</b> release cursor</span>
             </div>
           </div>
         </div>
@@ -1142,27 +1433,30 @@ const styles: Record<string, React.CSSProperties> = {
   crosshairH: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 22, height: 2, background: 'rgba(255,255,255,0.85)', borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.6)' },
   crosshairV: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 2, height: 22, background: 'rgba(255,255,255,0.85)', borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.6)' },
   hotbar: {
-    position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
-    display: 'flex', gap: 3, padding: 4, background: 'rgba(0,0,0,0.65)', borderRadius: 8,
-    border: '2px solid rgba(255,255,255,0.15)',
+    position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
+    display: 'flex', flexDirection: 'column' as const, gap: 2, padding: 4,
+    background: 'rgba(0,0,0,0.65)', borderRadius: 8, border: '2px solid rgba(255,255,255,0.15)',
+  },
+  hotbarRow: {
+    display: 'flex', gap: 2,
   },
   hotbarSlot: {
-    width: 52, height: 52, display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
-    justifyContent: 'center', borderRadius: 6, border: '2px solid transparent',
+    width: 42, height: 42, display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+    justifyContent: 'center', borderRadius: 4, border: '2px solid transparent',
     cursor: 'pointer', position: 'relative' as const, transition: 'border-color 0.1s',
   },
   hotbarSlotActive: {
     borderColor: '#fff', background: 'rgba(255,255,255,0.12)',
   },
   hotbarBlock: {
-    width: 28, height: 28, borderRadius: 4, border: '1px solid rgba(255,255,255,0.2)',
+    width: 22, height: 22, borderRadius: 3, border: '1px solid rgba(255,255,255,0.2)',
   },
   hotbarLabel: {
-    fontSize: 8, color: '#ccc', marginTop: 2, fontFamily: "'SF Mono', monospace",
-    textTransform: 'uppercase' as const, letterSpacing: 0.5,
+    fontSize: 7, color: '#ccc', marginTop: 1, fontFamily: "'SF Mono', monospace",
+    textTransform: 'uppercase' as const, letterSpacing: 0.3,
   },
   hotbarKey: {
-    position: 'absolute' as const, top: 2, right: 4, fontSize: 9, color: 'rgba(255,255,255,0.4)',
+    position: 'absolute' as const, top: 1, right: 3, fontSize: 8, color: 'rgba(255,255,255,0.4)',
     fontFamily: "'SF Mono', monospace", fontWeight: 700,
   },
   instructions: {

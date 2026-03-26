@@ -195,22 +195,24 @@ export class WalkieTalkieServer {
           if (this.tokenManager.validateSession(msg.sessionId)) {
             ws.sessionId = msg.sessionId;
             this.sessionSockets.set(msg.sessionId, ws);
+            if (!this.sessionTerminals.has(msg.sessionId)) {
+              this.sessionTerminals.set(msg.sessionId, new Set());
+            }
             clearTimeout(authTimer);
             this.send(ws, { type: 'auth:ok', sessionId: msg.sessionId });
 
             // Re-send the terminal list and replay scrollback for this session
-            const terminalIds = this.sessionTerminals.get(msg.sessionId);
+            const terminalIds = this.sessionTerminals.get(msg.sessionId)!;
             const terminals: TerminalInfo[] = [];
-            if (terminalIds) {
-              for (const id of terminalIds) {
-                const session = this.terminalManager.get(id);
-                if (session) {
-                  terminals.push(session.getInfo());
-                } else {
-                  terminalIds.delete(id);
-                }
+            for (const id of terminalIds) {
+              const session = this.terminalManager.get(id);
+              if (session) {
+                terminals.push(session.getInfo());
+              } else {
+                terminalIds.delete(id);
               }
             }
+            console.log(`[resume] session=${msg.sessionId.slice(0, 8)} terminals=${terminals.length} (tracked=${terminalIds.size})`);
             this.send(ws, { type: 'terminal:list', terminals });
 
             // Replay scrollback so terminals aren't blank
@@ -284,6 +286,8 @@ export class WalkieTalkieServer {
           this.sessionTerminals.set(sessionId, termSet);
         }
         termSet.add(session.id);
+
+        console.log(`[terminal:create] id=${session.id.slice(0, 8)} session=${sessionId.slice(0, 8)} tracked=${termSet.size}`);
 
         // Wire up output using session-based routing (survives reconnects)
         session.on('data', (data: string) => {
