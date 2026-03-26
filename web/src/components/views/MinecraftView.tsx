@@ -465,6 +465,35 @@ export default function MinecraftView({
     const world = generateWorld();
     worldRef.current = world;
 
+    // Validate player position — push above terrain if stuck
+    {
+      const pos = playerPosRef.current;
+      const hw = PLAYER_WIDTH / 2;
+      const bottom = pos.y - PLAYER_HEIGHT;
+      const bx = Math.floor(pos.x);
+      const bz = Math.floor(pos.z);
+      let stuck = false;
+      for (let by = Math.floor(bottom); by <= Math.floor(bottom + PLAYER_BODY_HEIGHT); by++) {
+        if (world.isSolid(bx, by, bz) || world.isSolid(Math.floor(pos.x - hw), by, bz) ||
+            world.isSolid(Math.floor(pos.x + hw), by, bz) || world.isSolid(bx, by, Math.floor(pos.z - hw)) ||
+            world.isSolid(bx, by, Math.floor(pos.z + hw))) {
+          stuck = true;
+          break;
+        }
+      }
+      if (stuck || pos.y < 0) {
+        // Find safe Y: scan upward from current X/Z
+        let safeY = 1;
+        for (let y = 0; y < 30; y++) {
+          if (world.isSolid(bx, y, bz) && !world.isSolid(bx, y + 1, bz) && !world.isSolid(bx, y + 2, bz)) {
+            safeY = y + 1 + PLAYER_HEIGHT;
+          }
+        }
+        pos.set(pos.x, safeY, pos.z);
+        velocityRef.current.set(0, 0, 0);
+      }
+    }
+
     // Load texture atlas
     const textureLoader = new THREE.TextureLoader();
     const texture = textureLoader.load('/minecraft.png');
