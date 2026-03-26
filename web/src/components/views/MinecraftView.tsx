@@ -8,27 +8,89 @@ import TerminalPopup from '@/components/TerminalPopup';
 // ── Block types ─────────────────────────────────────────────────────
 type BlockType = 'grass' | 'dirt' | 'stone' | 'wood' | 'leaves' | 'sand' | 'glass' | 'terminal';
 
-const BLOCK_COLORS: Record<BlockType, { color: number; emissive?: number; emissiveIntensity?: number; opacity?: number }> = {
-  grass:    { color: 0x4a8c3f },
-  dirt:     { color: 0x8b6b4a },
-  stone:    { color: 0x888888 },
-  wood:     { color: 0x6b4226 },
-  leaves:   { color: 0x2d6b1e, opacity: 0.9 },
-  sand:     { color: 0xdbc67b },
-  glass:    { color: 0xaaddff, opacity: 0.35 },
-  terminal: { color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.45 },
-};
-
-// Grass has special top face
-const GRASS_TOP_COLOR = 0x5aad4e;
-const GRASS_SIDE_COLOR = 0x8b6b4a;
-
 const HOTBAR_BLOCKS: BlockType[] = ['grass', 'dirt', 'stone', 'wood', 'leaves', 'sand', 'glass', 'terminal'];
 
 const BLOCK_LABELS: Record<BlockType, string> = {
   grass: 'Grass', dirt: 'Dirt', stone: 'Stone', wood: 'Wood',
   leaves: 'Leaves', sand: 'Sand', glass: 'Glass', terminal: 'Terminal',
 };
+
+// Hotbar preview colors (for the UI squares)
+const BLOCK_PREVIEW: Record<BlockType, string> = {
+  grass: '#5aad4e', dirt: '#8b6b4a', stone: '#888888', wood: '#6b4226',
+  leaves: '#2d6b1e', sand: '#dbc67b', glass: '#aaddff', terminal: '#00d4aa',
+};
+
+// ── Texture atlas mapping ───────────────────────────────────────────
+// Atlas is 16x16 tiles in a 256x256 PNG (minecraft.png)
+const ATLAS_TILES = 16;
+type TileCoord = [number, number]; // [col, row]
+// Face order: +x, -x, +y, -y, +z, -z
+type FaceMap = [TileCoord, TileCoord, TileCoord, TileCoord, TileCoord, TileCoord];
+
+function allFaces(t: TileCoord): FaceMap { return [t, t, t, t, t, t]; }
+
+const BLOCK_FACES: Record<BlockType, FaceMap> = {
+  grass:    [[3,0],[3,0],[0,0],[2,0],[3,0],[3,0]],  // side, side, top(gray→tint), bottom(dirt), side, side
+  dirt:     allFaces([2,0]),
+  stone:    allFaces([1,0]),
+  wood:     [[4,1],[4,1],[5,1],[5,1],[4,1],[4,1]],  // bark side, log top/bottom
+  leaves:   allFaces([4,3]),
+  sand:     allFaces([2,1]),
+  glass:    allFaces([1,3]),
+  terminal: allFaces([0,0]),  // not used — terminal uses solid color
+};
+
+// Create a BoxGeometry with UVs mapped to atlas tiles per face
+function createBlockGeometry(faces: FaceMap): THREE.BoxGeometry {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const uv = geo.getAttribute('uv') as THREE.BufferAttribute;
+  for (let face = 0; face < 6; face++) {
+    const [col, row] = faces[face];
+    const u0 = col / ATLAS_TILES;
+    const u1 = (col + 1) / ATLAS_TILES;
+    const v0 = 1 - (row + 1) / ATLAS_TILES;
+    const v1 = 1 - row / ATLAS_TILES;
+    const i = face * 4;
+    uv.setXY(i + 0, u0, v1);
+    uv.setXY(i + 1, u1, v1);
+    uv.setXY(i + 2, u0, v0);
+    uv.setXY(i + 3, u1, v0);
+  }
+  uv.needsUpdate = true;
+  return geo;
+}
+
+// Create material(s) for a block type using the loaded atlas texture
+function createBlockMaterial(
+  texture: THREE.Texture,
+  blockType: BlockType,
+): THREE.Material | THREE.Material[] {
+  if (blockType === 'grass') {
+    // Grass top is gray in atlas — tint green. Sides already have a green strip.
+    // Tint sides lightly to match biome color
+    const side = new THREE.MeshLambertMaterial({ map: texture, color: 0x88cc88 });
+    const top = new THREE.MeshLambertMaterial({ map: texture, color: 0x59a833 });
+    const bottom = new THREE.MeshLambertMaterial({ map: texture }); // dirt, no tint
+    return [side, side, top, bottom, side, side];
+  }
+  if (blockType === 'leaves') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, color: 0x4aaa2a, transparent: true, alphaTest: 0.1,
+    });
+  }
+  if (blockType === 'glass') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, transparent: true, alphaTest: 0.01, opacity: 0.8,
+    });
+  }
+  if (blockType === 'terminal') {
+    return new THREE.MeshLambertMaterial({
+      color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.45,
+    });
+  }
+  return new THREE.MeshLambertMaterial({ map: texture });
+}
 
 const WORLD_SIZE = 32;
 
@@ -166,39 +228,37 @@ function generateWorld(): VoxelWorld {
   return world;
 }
 
-// ── Material cache ──────────────────────────────────────────────────
-function createMaterials(): Map<BlockType, THREE.Material | THREE.Material[]> {
+// ── Create all materials for all block types ────────────────────────
+function createAllMaterials(texture: THREE.Texture): Map<BlockType, THREE.Material | THREE.Material[]> {
   const mats = new Map<BlockType, THREE.Material | THREE.Material[]>();
-
-  // Grass: multi-material (top green, sides brown)
-  const grassSide = new THREE.MeshLambertMaterial({ color: GRASS_SIDE_COLOR });
-  const grassTop = new THREE.MeshLambertMaterial({ color: GRASS_TOP_COLOR });
-  const grassBottom = new THREE.MeshLambertMaterial({ color: GRASS_SIDE_COLOR });
-  mats.set('grass', [grassSide, grassSide, grassTop, grassBottom, grassSide, grassSide]);
-
-  for (const [type, cfg] of Object.entries(BLOCK_COLORS)) {
-    if (type === 'grass') continue;
-    const opts: THREE.MeshLambertMaterialParameters = { color: cfg.color };
-    if (cfg.emissive !== undefined) { opts.emissive = cfg.emissive; opts.emissiveIntensity = cfg.emissiveIntensity; }
-    if (cfg.opacity !== undefined) { opts.transparent = true; opts.opacity = cfg.opacity; }
-    mats.set(type as BlockType, new THREE.MeshLambertMaterial(opts));
+  for (const type of HOTBAR_BLOCKS) {
+    mats.set(type, createBlockMaterial(texture, type));
   }
-
   return mats;
+}
+
+// ── Geometry cache per block type ───────────────────────────────────
+function createAllGeometries(): Map<BlockType, THREE.BoxGeometry> {
+  const geos = new Map<BlockType, THREE.BoxGeometry>();
+  for (const type of HOTBAR_BLOCKS) {
+    geos.set(type, createBlockGeometry(BLOCK_FACES[type]));
+  }
+  return geos;
 }
 
 // ── Build meshes from world ─────────────────────────────────────────
 function buildWorldMeshes(
   world: VoxelWorld,
   materials: Map<BlockType, THREE.Material | THREE.Material[]>,
+  geometries: Map<BlockType, THREE.BoxGeometry>,
 ): THREE.Object3D[] {
   const groups = world.grouped();
   const meshes: THREE.Object3D[] = [];
-  const geo = new THREE.BoxGeometry(1, 1, 1);
 
   for (const [type, positions] of groups) {
     if (positions.length === 0) continue;
     const mat = materials.get(type)!;
+    const geo = geometries.get(type)!;
     const inst = new THREE.InstancedMesh(geo, mat, positions.length);
     inst.userData.blockType = type;
     const dummy = new THREE.Object3D();
@@ -309,6 +369,7 @@ export default function MinecraftView({
     animId: number;
     worldMeshes: THREE.Object3D[];
     materials: Map<BlockType, THREE.Material | THREE.Material[]>;
+    geometries: Map<BlockType, THREE.BoxGeometry>;
     raycaster: THREE.Raycaster;
     highlightMesh: THREE.Mesh;
   } | null>(null);
@@ -335,16 +396,12 @@ export default function MinecraftView({
     const world = worldRef.current;
     if (!s || !world) return;
 
-    // Remove old meshes
     for (const m of s.worldMeshes) {
       s.scene.remove(m);
-      if (m instanceof THREE.InstancedMesh) {
-        m.geometry.dispose();
-      }
+      if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
     }
 
-    // Build new
-    s.worldMeshes = buildWorldMeshes(world, s.materials);
+    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries);
     for (const m of s.worldMeshes) s.scene.add(m);
   }, []);
 
@@ -353,7 +410,7 @@ export default function MinecraftView({
     const container = containerRef.current;
     if (!container) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: false }); // pixel art look
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = true;
@@ -383,8 +440,16 @@ export default function MinecraftView({
     const world = generateWorld();
     worldRef.current = world;
 
-    const materials = createMaterials();
-    const worldMeshes = buildWorldMeshes(world, materials);
+    // Load texture atlas
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load('/minecraft.png');
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    const geometries = createAllGeometries();
+    const materials = createAllMaterials(texture);
+    const worldMeshes = buildWorldMeshes(world, materials, geometries);
     for (const m of worldMeshes) scene.add(m);
 
     // Block highlight wireframe
@@ -397,7 +462,7 @@ export default function MinecraftView({
     const raycaster = new THREE.Raycaster();
     raycaster.far = 8;
 
-    const state = { renderer, scene, camera, animId: 0, worldMeshes, materials, raycaster, highlightMesh };
+    const state = { renderer, scene, camera, animId: 0, worldMeshes, materials, geometries, raycaster, highlightMesh };
     sceneObjsRef.current = state;
 
     // ── Pointer lock ────────────────────────────────────────────────
@@ -634,7 +699,7 @@ export default function MinecraftView({
           scene.remove(m);
           if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
         }
-        state.worldMeshes = buildWorldMeshes(world, materials);
+        state.worldMeshes = buildWorldMeshes(world, materials, geometries);
         for (const m of state.worldMeshes) scene.add(m);
         meshDirtyRef.current = false;
         lastMeshRebuild = time;
@@ -759,7 +824,7 @@ export default function MinecraftView({
             >
               <div style={{
                 ...styles.hotbarBlock,
-                background: `#${BLOCK_COLORS[type].color.toString(16).padStart(6, '0')}`,
+                background: BLOCK_PREVIEW[type],
                 ...(type === 'glass' ? { opacity: 0.5 } : {}),
                 ...(type === 'terminal' ? { boxShadow: '0 0 8px #00d4aa' } : {}),
               }} />
