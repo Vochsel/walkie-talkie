@@ -12,6 +12,7 @@ export function useWalkieTalkie() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const outputHandlersRef = useRef<Map<string, (data: string) => void>>(new Map());
+  const outputBuffersRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const client = new WalkieTalkieClient();
@@ -37,6 +38,11 @@ export function useWalkieTalkie() {
     const unsubMsg = client.onMessage((msg: ServerMessage) => {
       switch (msg.type) {
         case 'terminal:output': {
+          // Buffer output so it can be replayed when popup reopens
+          const buf = outputBuffersRef.current.get(msg.terminalId) ?? '';
+          const updated = buf + msg.data;
+          // Cap buffer at 100KB to prevent memory issues
+          outputBuffersRef.current.set(msg.terminalId, updated.length > 100_000 ? updated.slice(-100_000) : updated);
           const handler = outputHandlersRef.current.get(msg.terminalId);
           if (handler) handler(msg.data);
           break;
@@ -47,6 +53,7 @@ export function useWalkieTalkie() {
         case 'terminal:exited':
           setTerminals((prev) => prev.filter((t) => t.id !== msg.terminalId));
           outputHandlersRef.current.delete(msg.terminalId);
+          outputBuffersRef.current.delete(msg.terminalId);
           break;
         case 'terminal:list':
           setTerminals(msg.terminals);
@@ -74,6 +81,7 @@ export function useWalkieTalkie() {
     clientRef.current?.disconnect();
     setTerminals([]);
     outputHandlersRef.current.clear();
+    outputBuffersRef.current.clear();
     // Remove saved connection on intentional disconnect
     if (serverUrl) removeConnection(serverUrl);
   }, []);
@@ -101,6 +109,9 @@ export function useWalkieTalkie() {
   const registerOutputHandler = useCallback(
     (terminalId: string, handler: (data: string) => void) => {
       outputHandlersRef.current.set(terminalId, handler);
+      // Replay buffered output so reopened terminals show previous content
+      const buffer = outputBuffersRef.current.get(terminalId);
+      if (buffer) handler(buffer);
       return () => {
         outputHandlersRef.current.delete(terminalId);
       };

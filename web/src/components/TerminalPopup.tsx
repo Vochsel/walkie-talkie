@@ -7,6 +7,7 @@ import '@xterm/xterm/css/xterm.css';
 
 interface TerminalPopupProps {
   terminalId: string;
+  visible: boolean;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   registerOutput: (handler: (data: string) => void) => () => void;
@@ -17,6 +18,7 @@ interface TerminalPopupProps {
 
 export default function TerminalPopup({
   terminalId,
+  visible,
   onInput,
   onResize,
   registerOutput,
@@ -26,6 +28,7 @@ export default function TerminalPopup({
 }: TerminalPopupProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -84,18 +87,38 @@ export default function TerminalPopup({
     observer.observe(containerRef.current);
 
     termRef.current = term;
+    fitAddonRef.current = fitAddon;
     term.focus();
 
     return () => {
       unregister();
       observer.disconnect();
       term.dispose();
+      termRef.current = null;
+      fitAddonRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
 
+  // Re-fit and focus when becoming visible
+  useEffect(() => {
+    if (visible && termRef.current && fitAddonRef.current) {
+      requestAnimationFrame(() => {
+        fitAddonRef.current?.fit();
+        termRef.current?.focus();
+      });
+    }
+  }, [visible]);
+
   return (
-    <div style={{ ...popupStyles.overlay, ...style }} onClick={onClose}>
+    <div
+      style={{
+        ...popupStyles.overlay,
+        ...style,
+        display: visible ? 'flex' : 'none',
+      }}
+      onClick={onClose}
+    >
       <div style={popupStyles.window} onClick={(e) => e.stopPropagation()}>
         <div style={popupStyles.titlebar}>
           <span style={popupStyles.title}>{title || `Terminal`}</span>
@@ -114,7 +137,6 @@ const popupStyles: Record<string, React.CSSProperties> = {
     position: 'fixed',
     inset: 0,
     background: 'rgba(0,0,0,0.6)',
-    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,

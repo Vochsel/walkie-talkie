@@ -302,6 +302,64 @@ function createAllGeometries(): Map<BlockType, THREE.BoxGeometry> {
   return geos;
 }
 
+// ── Low-poly CRT computer model for terminal blocks ─────────────────
+function createCRTModel(position: THREE.Vector3): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.userData.blockType = 'terminal';
+
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a2a3d });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x1e1e2e });
+  const screenMat = new THREE.MeshLambertMaterial({
+    color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.5,
+  });
+
+  // Monitor housing — boxy CRT shell
+  const monitorGeo = new THREE.BoxGeometry(0.78, 0.52, 0.5);
+  const monitor = new THREE.Mesh(monitorGeo, bodyMat);
+  monitor.position.set(0, 0.1, -0.03);
+  monitor.castShadow = true;
+  monitor.receiveShadow = true;
+  group.add(monitor);
+
+  // Screen bezel (dark inset frame)
+  const bezelGeo = new THREE.BoxGeometry(0.62, 0.38, 0.02);
+  const bezel = new THREE.Mesh(bezelGeo, darkMat);
+  bezel.position.set(0, 0.12, 0.225);
+  group.add(bezel);
+
+  // Screen (glowing terminal green)
+  const screenGeo = new THREE.BoxGeometry(0.52, 0.3, 0.02);
+  const screen = new THREE.Mesh(screenGeo, screenMat);
+  screen.position.set(0, 0.12, 0.235);
+  group.add(screen);
+
+  // Stand / neck
+  const standGeo = new THREE.BoxGeometry(0.14, 0.12, 0.14);
+  const stand = new THREE.Mesh(standGeo, darkMat);
+  stand.position.set(0, -0.22, 0);
+  stand.castShadow = true;
+  group.add(stand);
+
+  // Base plate
+  const baseGeo = new THREE.BoxGeometry(0.45, 0.04, 0.3);
+  const base = new THREE.Mesh(baseGeo, bodyMat);
+  base.position.set(0, -0.32, 0);
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+
+  // Keyboard
+  const kbGeo = new THREE.BoxGeometry(0.5, 0.03, 0.18);
+  const kb = new THREE.Mesh(kbGeo, darkMat);
+  kb.position.set(0, -0.32, 0.34);
+  kb.castShadow = true;
+  kb.receiveShadow = true;
+  group.add(kb);
+
+  return group;
+}
+
 // ── Build meshes from world ─────────────────────────────────────────
 function buildWorldMeshes(
   world: VoxelWorld,
@@ -313,6 +371,15 @@ function buildWorldMeshes(
 
   for (const [type, positions] of groups) {
     if (positions.length === 0) continue;
+
+    // Terminal blocks use a custom CRT model instead of instanced cubes
+    if (type === 'terminal') {
+      for (const pos of positions) {
+        meshes.push(createCRTModel(pos));
+      }
+      continue;
+    }
+
     const mat = materials.get(type)!;
     const geo = geometries.get(type)!;
     const inst = new THREE.InstancedMesh(geo, mat, positions.length);
@@ -695,7 +762,7 @@ export default function MinecraftView({
 
     function raycastBlock(): { blockPos: THREE.Vector3; placePos: THREE.Vector3; blockType: BlockType; terminalId?: string } | null {
       raycaster.setFromCamera(screenCenter, camera);
-      const intersects = raycaster.intersectObjects(state.worldMeshes, false);
+      const intersects = raycaster.intersectObjects(state.worldMeshes, true);
       if (intersects.length === 0) return null;
 
       const hit = intersects[0];
@@ -706,6 +773,9 @@ export default function MinecraftView({
         const matrix = new THREE.Matrix4();
         hit.object.getMatrixAt(hit.instanceId, matrix);
         hitPos = new THREE.Vector3().setFromMatrixPosition(matrix);
+      } else if (hit.object.parent && hit.object.parent.userData.blockType) {
+        // Child of a CRT group — use the group's position
+        hitPos = hit.object.parent.position.clone();
       } else {
         hitPos = hit.object.position.clone();
       }
@@ -872,7 +942,18 @@ export default function MinecraftView({
         // Remove old, build new
         for (const m of state.worldMeshes) {
           scene.remove(m);
-          if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
+          if (m instanceof THREE.InstancedMesh) {
+            m.geometry.dispose();
+          } else if (m instanceof THREE.Group) {
+            m.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                child.geometry.dispose();
+                const mat = child.material;
+                if (Array.isArray(mat)) mat.forEach(mm => mm.dispose());
+                else mat.dispose();
+              }
+            });
+          }
         }
         state.worldMeshes = buildWorldMeshes(world, materials, geometries);
         for (const m of state.worldMeshes) scene.add(m);
@@ -1036,17 +1117,19 @@ export default function MinecraftView({
         </div>
       )}
 
-      {/* Terminal popup */}
-      {popupTerminalId && terminals.find(t => t.id === popupTerminalId) && (
+      {/* Terminal popups — kept mounted so xterm state persists */}
+      {terminals.map((t) => (
         <TerminalPopup
-          terminalId={popupTerminalId}
-          onInput={(data) => sendInput(popupTerminalId, data)}
-          onResize={(cols, rows) => resizeTerminal(popupTerminalId, cols, rows)}
-          registerOutput={(handler) => registerOutputHandler(popupTerminalId, handler)}
+          key={t.id}
+          terminalId={t.id}
+          visible={popupTerminalId === t.id}
+          onInput={(data) => sendInput(t.id, data)}
+          onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
+          registerOutput={(handler) => registerOutputHandler(t.id, handler)}
           onClose={closePopup}
-          title={`Terminal [${popupTerminalId.slice(0, 8)}]`}
+          title={`Terminal [${t.id.slice(0, 8)}]`}
         />
-      )}
+      ))}
     </div>
   );
 }

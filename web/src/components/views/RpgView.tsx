@@ -609,21 +609,21 @@ export default function RpgView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openTerminalId, isWalkable, findNearbyStation, terminals.length, tryMove, isStationAt]);
 
-  const openTerminal = openTerminalId ? terminals.find(t => t.id === openTerminalId) : null;
-
   return (
     <div ref={containerRef} style={styles.container}>
       <canvas ref={canvasRef} style={styles.canvas} onClick={handleCanvasClick} />
-      {openTerminal && (
+      {terminals.map((t) => (
         <TerminalPopup
-          terminalId={openTerminal.id}
-          onInput={(data) => sendInput(openTerminal.id, data)}
-          onResize={(cols, rows) => resizeTerminal(openTerminal.id, cols, rows)}
-          registerOutput={(handler) => registerOutputHandler(openTerminal.id, handler)}
+          key={t.id}
+          terminalId={t.id}
+          visible={openTerminalId === t.id}
+          onInput={(data) => sendInput(t.id, data)}
+          onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
+          registerOutput={(handler) => registerOutputHandler(t.id, handler)}
           onClose={() => setOpenTerminalId(null)}
-          title={`Station [${openTerminal.id.slice(0, 8)}]`}
+          title={`Station [${t.id.slice(0, 8)}]`}
         />
-      )}
+      ))}
     </div>
   );
 }

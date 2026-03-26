@@ -112,15 +112,35 @@ export default function WhiteboardView({
     });
   }, [terminals]);
 
-  // Space key tracking for pan mode
+  // Focus on active node with F key
+  const focusActiveNode = useCallback(() => {
+    if (!activeTerminalId || !containerRef.current) return;
+    const layout = nodeLayouts.get(activeTerminalId);
+    if (!layout) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const targetZoom = 1;
+    const cx = layout.x + layout.width / 2;
+    const cy = layout.y + layout.height / 2;
+    setPan({
+      x: rect.width / 2 - cx * targetZoom,
+      y: rect.height / 2 - cy * targetZoom,
+    });
+    setZoom(targetZoom);
+  }, [activeTerminalId, nodeLayouts, setPan, setZoom]);
+
+  // Space key tracking for pan mode + F to focus
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.xterm')) return;
+
       if (e.code === 'Space' && !e.repeat) {
-        const target = e.target as HTMLElement;
-        // Don't hijack space if user is typing in a terminal
-        if (target.closest('.xterm')) return;
         e.preventDefault();
         setSpaceHeld(true);
+      }
+      if (e.code === 'KeyF' && !e.repeat) {
+        e.preventDefault();
+        focusActiveNode();
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -134,7 +154,7 @@ export default function WhiteboardView({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [focusActiveNode]);
 
   // Global mouse move/up for dragging, resizing, panning
   useEffect(() => {
@@ -188,6 +208,7 @@ export default function WhiteboardView({
   // Zoom with scroll wheel
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
+      if ((e.target as HTMLElement).closest?.('.nowheel')) return;
       e.preventDefault();
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -320,6 +341,7 @@ export default function WhiteboardView({
           return (
             <div
               key={term.id}
+              className="nowheel"
               onClick={(e) => handleNodeClick(term.id, e)}
               style={{
                 position: 'absolute',
@@ -380,7 +402,10 @@ export default function WhiteboardView({
               </div>
 
               {/* Terminal content */}
-              <div style={canvasStyles.terminalContainer}>
+              <div
+                style={canvasStyles.terminalContainer}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
                 <TerminalView
                   terminalId={term.id}
                   isActive={true}
