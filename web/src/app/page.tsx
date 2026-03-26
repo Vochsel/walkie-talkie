@@ -50,23 +50,37 @@ function AppContent() {
 
   const autoResumedRef = useRef(false);
 
-  // Auto-connect from QR code URL params
+  // Auto-connect or resume session
   useEffect(() => {
-    const token = searchParams.get('token');
-    const server = searchParams.get('server');
-    if (token) {
-      const serverUrl = server || `${window.location.protocol}//${window.location.hostname}:3456`;
-      connect(serverUrl, token);
-      return;
-    }
-
-    // Auto-resume from localStorage (only once)
     if (!autoResumedRef.current) {
       autoResumedRef.current = true;
+
+      const token = searchParams.get('token');
+      const server = searchParams.get('server');
+      const serverUrl = server || `${window.location.protocol}//${window.location.hostname}:3456`;
+
+      // Check for an existing session we can resume (survives page refresh)
       const saved = getSavedConnections();
+      const existing = saved.find((c) => c.serverUrl === serverUrl);
+      if (existing && Date.now() - existing.connectedAt < 24 * 60 * 60 * 1000) {
+        // Strip token from URL so future refreshes don't retry it
+        if (token) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        resumeSession(existing.serverUrl, existing.sessionId);
+        return;
+      }
+
+      // Fresh connect from QR code / URL params
+      if (token) {
+        window.history.replaceState({}, '', window.location.pathname);
+        connect(serverUrl, token);
+        return;
+      }
+
+      // Fall back to most recent saved connection
       if (saved.length > 0) {
         const recent = saved[0];
-        // Only auto-resume if connected within last 24 hours
         if (Date.now() - recent.connectedAt < 24 * 60 * 60 * 1000) {
           resumeSession(recent.serverUrl, recent.sessionId);
         }
