@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "pnpm --filter @walkie-talkie/shared build && next build",
+    "build": "pnpm --filter @walkie-talkie/shared build && pnpm --filter @walkie-talkie/client build && pnpm --filter @walkie-talkie/react build && next build",
     "start": "next start"
   },
   "dependencies": {
