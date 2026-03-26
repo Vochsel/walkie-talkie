@@ -339,8 +339,36 @@ export default function RpgView({
       const cw = canvas.width, ch = canvas.height;
       const world = worldRef.current!;
 
-      // ── Movement input ────────────────────────────────────────────
-      if (!openTerminalId) {
+      // ── Animate move ──────────────────────────────────────────────
+      let moveJustFinished = false;
+      if (isMovingRef.current) {
+        moveProgressRef.current += dt / MOVE_DURATION;
+        if (moveProgressRef.current >= 1) {
+          moveProgressRef.current = 1;
+          isMovingRef.current = false;
+          moveJustFinished = true;
+          playerAnimRef.current = {
+            x: playerTileRef.current.x + 0.5,
+            y: playerTileRef.current.y + 0.5,
+          };
+          // Process queued move (from key held during previous move)
+          if (moveQueueRef.current) {
+            const q = moveQueueRef.current;
+            moveQueueRef.current = null;
+            tryMove(q);
+          }
+        } else {
+          const t = moveProgressRef.current;
+          const s = t * t * (3 - 2 * t);
+          playerAnimRef.current = {
+            x: moveFromRef.current.x + 0.5 + (playerTileRef.current.x - moveFromRef.current.x) * s,
+            y: moveFromRef.current.y + 0.5 + (playerTileRef.current.y - moveFromRef.current.y) * s,
+          };
+        }
+      }
+
+      // ── Movement input (skip if a queued move already started this frame) ──
+      if (!openTerminalId && !isMovingRef.current && !moveJustFinished) {
         const keys = keysRef.current;
         let dir: Dir | null = null;
         if (keys.has('w') || keys.has('arrowup')) dir = 'up';
@@ -349,33 +377,6 @@ export default function RpgView({
         else if (keys.has('d') || keys.has('arrowright')) dir = 'right';
 
         if (dir) tryMove(dir);
-      }
-
-      // ── Animate move ──────────────────────────────────────────────
-      if (isMovingRef.current) {
-        moveProgressRef.current += dt / MOVE_DURATION;
-        if (moveProgressRef.current >= 1) {
-          moveProgressRef.current = 1;
-          isMovingRef.current = false;
-          playerAnimRef.current = {
-            x: playerTileRef.current.x + 0.5,
-            y: playerTileRef.current.y + 0.5,
-          };
-          // Process queued move
-          if (moveQueueRef.current) {
-            const q = moveQueueRef.current;
-            moveQueueRef.current = null;
-            tryMove(q);
-          }
-        } else {
-          const t = moveProgressRef.current;
-          // Smooth step
-          const s = t * t * (3 - 2 * t);
-          playerAnimRef.current = {
-            x: moveFromRef.current.x + 0.5 + (playerTileRef.current.x - moveFromRef.current.x) * s,
-            y: moveFromRef.current.y + 0.5 + (playerTileRef.current.y - moveFromRef.current.y) * s,
-          };
-        }
       }
 
       nearbyStationRef.current = findNearbyStation();

@@ -198,11 +198,11 @@ export default function WhiteboardView({
     [zoom]
   );
 
-  // Canvas mouse down — start panning (middle-click or space+left-click)
+  // Canvas mouse down — start panning (any click on background, middle-click, or space+click)
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle click or space+left click
-      if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+      // Left click on canvas background, middle click, or space+left click
+      if (e.button === 1 || e.button === 0) {
         e.preventDefault();
         setPanning({
           startMouseX: e.clientX,
@@ -212,7 +212,7 @@ export default function WhiteboardView({
         });
       }
     },
-    [spaceHeld, pan]
+    [pan]
   );
 
   // Node titlebar drag start
@@ -372,7 +372,7 @@ export default function WhiteboardView({
               <div style={canvasStyles.terminalContainer}>
                 <TerminalView
                   terminalId={term.id}
-                  isActive={isActive}
+                  isActive={true}
                   onInput={(data) => sendInput(term.id, data)}
                   onResize={(cols, rows) => resizeTerminal(term.id, cols, rows)}
                   registerOutput={(handler) => registerOutputHandler(term.id, handler)}
