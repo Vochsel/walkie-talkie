@@ -10,12 +10,19 @@ const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const WHITE = '\x1b[37m';
+const UNDERLINE = '\x1b[4m';
+
+const DEMO_HOST = 'https://demo.walkie-talkie.dev';
 
 function banner() {
   console.log('');
   console.log(`  ${CYAN}${BOLD}walkie-talkie${RESET}  ${DIM}v1.0.0${RESET}`);
   console.log(`  ${DIM}Remote terminal access from your browser${RESET}`);
   console.log('');
+}
+
+function demoUrl(serverUrl: string, token: string): string {
+  return `${DEMO_HOST}?server=${encodeURIComponent(serverUrl)}&token=${encodeURIComponent(token)}`;
 }
 
 async function main() {
@@ -28,34 +35,35 @@ async function main() {
   await server.start();
 
   const token = server.generateToken();
-  const url = `http://localhost:${port}`;
-  const connectUrl = `${url}?token=${token.value}`;
+  const localUrl = `http://localhost:${port}`;
+  const openUrl = demoUrl(localUrl, token.value);
 
   console.log(`  ${GREEN}${BOLD}Server running${RESET}`);
-  console.log(`  ${DIM}URL:${RESET}   ${WHITE}${url}${RESET}`);
+  console.log(`  ${DIM}Local:${RESET} ${WHITE}${localUrl}${RESET}`);
   console.log(`  ${DIM}Token:${RESET} ${CYAN}${BOLD}${token.value}${RESET}`);
   console.log('');
 
-  // QR code
+  // QR code points to demo site
   try {
-    const qr = await generateQR(connectUrl);
+    const qr = await generateQR(openUrl);
     console.log(`  ${DIM}Scan to connect:${RESET}`);
     console.log(qr.split('\n').map((l) => '  ' + l).join('\n'));
   } catch {
     // QR generation failed — skip
   }
 
-  console.log(`  ${DIM}Connect your web client to:${RESET}`);
-  console.log(`  ${CYAN}${connectUrl}${RESET}`);
+  console.log(`  ${DIM}Open in browser:${RESET}`);
+  console.log(`  ${CYAN}${UNDERLINE}${openUrl}${RESET}`);
   console.log('');
-  console.log(`  ${DIM}Or start the web UI:${RESET}  ${YELLOW}npx walkie-talkie-web${RESET}`);
   console.log(`  ${DIM}Press${RESET} ${WHITE}Ctrl+C${RESET} ${DIM}to stop${RESET}`);
   console.log('');
 
   // Generate new token on SIGUSR1
   process.on('SIGUSR1', () => {
     const t = server.generateToken();
+    const url = demoUrl(localUrl, t.value);
     console.log(`  ${GREEN}New token:${RESET} ${CYAN}${BOLD}${t.value}${RESET}`);
+    console.log(`  ${CYAN}${UNDERLINE}${url}${RESET}`);
   });
 
   // Graceful shutdown

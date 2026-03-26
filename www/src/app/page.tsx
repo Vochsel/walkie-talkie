@@ -326,19 +326,19 @@ export default function Page() {
               <span style={{ color: '#28c840' }}>{'  Server running'}</span>
             </CodeLine>
             <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  URL:   '}</span>
+              <span style={{ color: TEXT_DIM }}>{'  Local: '}</span>
               <span style={{ color: '#fff' }}>http://localhost:3456</span>
             </CodeLine>
             <CodeLine>
               <span style={{ color: TEXT_DIM }}>{'  Token: '}</span>
-              <span style={{ color: '#fff' }}>a7f3-b2c1-d9e0-f456</span>
+              <span style={{ color: ACCENT, fontWeight: 700 }}>a7f3-b2c1-d9e0-f456</span>
             </CodeLine>
             <div style={{ height: 12 }} />
             <CodeLine>
-              <span style={{ color: TEXT_DIM }}>{'  Connect your web client to:'}</span>
+              <span style={{ color: TEXT_DIM }}>{'  Open in browser:'}</span>
             </CodeLine>
             <CodeLine>
-              <span style={{ color: ACCENT }}>{'  http://localhost:3456?token=a7f3-b2c1-d9e0-f456'}</span>
+              <span style={{ color: ACCENT, textDecoration: 'underline' }}>{'  https://demo.walkie-talkie.dev?server=...&token=a7f3-b2c1-d9e0-f456'}</span>
             </CodeLine>
           </TerminalWindow>
         </div>
