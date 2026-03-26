@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
+import { usePersistedRef } from '@/hooks/usePersistedState';
 
 // ── Constants ───────────────────────────────────────────────────────
 const BASE_TILE = 32;
@@ -121,11 +122,21 @@ export default function RpgView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<TileType[][] | null>(null);
-  const stationsRef = useRef<Map<string, Station>>(new Map());
+  // Persisted: station positions (stored as plain object, converted to Map)
+  const { ref: stationsObjRef, save: saveStations } = usePersistedRef<Record<string, Station>>('rpg:stations', {});
+  const stationsRef = useRef<Map<string, Station>>(new Map(Object.entries(stationsObjRef.current)));
+  // Keep the persisted object in sync
+  const syncStations = useCallback(() => {
+    stationsObjRef.current = Object.fromEntries(stationsRef.current);
+    saveStations();
+  }, [stationsObjRef, saveStations]);
 
-  // Tile-based player: integer grid position + animation
-  const playerTileRef = useRef({ x: Math.floor(WORLD_W / 2), y: Math.floor(WORLD_H / 2) });
-  const playerAnimRef = useRef({ x: WORLD_W / 2, y: WORLD_H / 2 });
+  // Persisted: player position
+  const { ref: playerTileRef } = usePersistedRef('rpg:player', { x: Math.floor(WORLD_W / 2), y: Math.floor(WORLD_H / 2) });
+  const playerAnimRef = useRef({ x: playerTileRef.current.x + 0.5, y: playerTileRef.current.y + 0.5 });
+
+  // Persisted: zoom
+  const { ref: zoomRef, save: saveZoom } = usePersistedRef('rpg:zoom', 1.5);
   const playerDirRef = useRef<Dir>('down');
   const moveQueueRef = useRef<Dir | null>(null);
   const isMovingRef = useRef(false);
@@ -135,13 +146,12 @@ export default function RpgView({
   const keysRef = useRef<Set<string>>(new Set());
   const animFrameRef = useRef(0);
   const lastTimeRef = useRef(0);
-  const zoomRef = useRef(1.5);
   const nearbyStationRef = useRef<string | null>(null);
   const pendingPlacementRef = useRef<{ x: number; y: number } | null>(null);
   const hoverTileRef = useRef<{ x: number; y: number } | null>(null);
 
   const [openTerminalId, setOpenTerminalId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1.5);
+  const [zoom, setZoom] = useState(zoomRef.current);
 
   if (!worldRef.current) worldRef.current = generateWorld();
 
@@ -194,7 +204,8 @@ export default function RpgView({
   // ── Place terminals ───────────────────────────────────────────────
   const placeStation = useCallback((terminalId: string, tx: number, ty: number) => {
     stationsRef.current.set(terminalId, { tileX: tx, tileY: ty });
-  }, []);
+    syncStations();
+  }, [syncStations]);
 
   // Sync terminals
   useEffect(() => {
@@ -219,8 +230,10 @@ export default function RpgView({
       }
     }
     const ids = new Set(terminals.map(t => t.id));
-    stationsRef.current.forEach((_, id) => { if (!ids.has(id)) stationsRef.current.delete(id); });
-  }, [terminals, placeStation, isStationAt]);
+    let removed = false;
+    stationsRef.current.forEach((_, id) => { if (!ids.has(id)) { stationsRef.current.delete(id); removed = true; } });
+    if (removed) syncStations();
+  }, [terminals, placeStation, isStationAt, syncStations]);
 
   // ── Keyboard ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -249,10 +262,11 @@ export default function RpgView({
       const nz = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoomRef.current + dir));
       zoomRef.current = nz;
       setZoom(nz);
+      saveZoom();
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, []);
+  }, [saveZoom]);
 
   // ── Mouse move for hover tile ─────────────────────────────────────
   useEffect(() => {

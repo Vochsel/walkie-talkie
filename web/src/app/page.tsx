@@ -9,6 +9,7 @@ import ConnectScreen from '@/components/ConnectScreen';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import ViewSwitcher, { ViewType } from '@/components/ViewSwitcher';
 import { getSavedConnections } from '@/lib/storage';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 const ClassicView = dynamic(() => import('@/components/views/ClassicView'), { ssr: false });
 const SidebarView = dynamic(() => import('@/components/views/SidebarView'), { ssr: false });
@@ -44,7 +45,7 @@ function AppContent() {
 
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<ViewType>('classic');
+  const [currentView, setCurrentView] = usePersistedState<ViewType>('view', 'classic');
 
   const autoResumedRef = useRef(false);
 

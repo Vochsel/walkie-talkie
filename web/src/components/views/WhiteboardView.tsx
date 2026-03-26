@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 interface NodeLayout {
   x: number;
@@ -33,9 +34,19 @@ export default function WhiteboardView({
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
-  const [nodeLayouts, setNodeLayouts] = useState<Map<string, NodeLayout>>(new Map());
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // Persist layouts as a plain object (Maps don't serialize)
+  const [layoutsObj, setLayoutsObj] = usePersistedState<Record<string, NodeLayout>>('whiteboard:layouts', {});
+  const nodeLayouts = new Map(Object.entries(layoutsObj));
+  const setNodeLayouts = useCallback((updater: (prev: Map<string, NodeLayout>) => Map<string, NodeLayout>) => {
+    setLayoutsObj((prev) => {
+      const prevMap = new Map(Object.entries(prev));
+      const nextMap = updater(prevMap);
+      return Object.fromEntries(nextMap);
+    });
+  }, [setLayoutsObj]);
+
+  const [pan, setPan] = usePersistedState('whiteboard:pan', { x: 0, y: 0 });
+  const [zoom, setZoom] = usePersistedState('whiteboard:zoom', 1);
 
   // Drag state
   const [dragging, setDragging] = useState<{

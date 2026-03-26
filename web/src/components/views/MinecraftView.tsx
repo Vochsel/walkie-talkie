@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
+import { usePersistedRef, usePersistedState } from '@/hooks/usePersistedState';
 
 // ── Block types ─────────────────────────────────────────────────────
 type BlockType = 'grass' | 'dirt' | 'stone' | 'wood' | 'leaves' | 'sand' | 'glass' | 'terminal';
@@ -358,7 +359,7 @@ export default function MinecraftView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState(0);
+  const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
 
   // Refs for game state (avoid re-renders)
   const worldRef = useRef<VoxelWorld | null>(null);
@@ -375,18 +376,42 @@ export default function MinecraftView({
   } | null>(null);
 
   const keysRef = useRef<Set<string>>(new Set());
-  const yawRef = useRef(0);
-  const pitchRef = useRef(0);
-  const playerPosRef = useRef(new THREE.Vector3(WORLD_SIZE / 2, 20, WORLD_SIZE / 2));
+  const { ref: yawRef } = usePersistedRef('mc:yaw', 0);
+  const { ref: pitchRef } = usePersistedRef('mc:pitch', 0);
+  const { ref: playerPosArrRef } = usePersistedRef<[number, number, number]>('mc:pos', [WORLD_SIZE / 2, 20, WORLD_SIZE / 2]);
+  // Convert persisted array to THREE.Vector3
+  const playerPosRef = useRef(new THREE.Vector3(...playerPosArrRef.current));
+  // Keep array ref in sync for saving
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const p = playerPosRef.current;
+      playerPosArrRef.current = [p.x, p.y, p.z];
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [playerPosArrRef]);
+
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const onGroundRef = useRef(false);
   const selectedSlotRef = useRef(0);
   const meshDirtyRef = useRef(false);
 
-  // Terminal block tracking
-  const terminalPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
-  const posToTerminalRef = useRef<Map<string, string>>(new Map());
+  // Terminal block tracking — persisted as plain objects
+  const { ref: termPosObjRef, save: saveTermPositions } = usePersistedRef<Record<string, [number, number, number]>>('mc:termPositions', {});
+  const terminalPositionsRef = useRef<Map<string, THREE.Vector3>>(
+    new Map(Object.entries(termPosObjRef.current).map(([id, [x, y, z]]) => [id, new THREE.Vector3(x, y, z)]))
+  );
+  const { ref: posToTermObjRef, save: savePosToTerm } = usePersistedRef<Record<string, string>>('mc:posToTerm', {});
+  const posToTerminalRef = useRef<Map<string, string>>(new Map(Object.entries(posToTermObjRef.current)));
   const pendingPlacementRef = useRef<THREE.Vector3 | null>(null);
+
+  const syncTerminalMaps = useCallback(() => {
+    const posObj: Record<string, [number, number, number]> = {};
+    terminalPositionsRef.current.forEach((v, id) => { posObj[id] = [v.x, v.y, v.z]; });
+    termPosObjRef.current = posObj;
+    saveTermPositions();
+    posToTermObjRef.current = Object.fromEntries(posToTerminalRef.current);
+    savePosToTerm();
+  }, [termPosObjRef, saveTermPositions, posToTermObjRef, savePosToTerm]);
 
   // Keep selectedSlotRef in sync
   useEffect(() => { selectedSlotRef.current = selectedSlot; }, [selectedSlot]);
@@ -559,6 +584,7 @@ export default function MinecraftView({
           const key = posKey(blockPos.x, blockPos.y, blockPos.z);
           posToTerminalRef.current.delete(key);
           terminalPositionsRef.current.delete(terminalId);
+          syncTerminalMaps();
         }
 
         world.delete(blockPos.x, blockPos.y, blockPos.z);
@@ -794,7 +820,8 @@ export default function MinecraftView({
         }
       }
     }
-  }, [terminals]);
+    syncTerminalMaps();
+  }, [terminals, syncTerminalMaps]);
 
   const closePopup = useCallback(() => setPopupTerminalId(null), []);
 

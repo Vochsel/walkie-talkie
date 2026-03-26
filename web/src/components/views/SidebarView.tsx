@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 interface Group {
   name: string;
@@ -20,7 +21,7 @@ export default function SidebarView({
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
-  const [groups, setGroups] = useState<Group[]>([
+  const [groups, setGroups] = usePersistedState<Group[]>('sidebar:groups', [
     { name: 'Default', terminalIds: [], collapsed: false },
   ]);
   const [editingGroup, setEditingGroup] = useState<number | null>(null);
