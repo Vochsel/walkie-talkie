@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@types/three": "^0.183.1",
+    "@walkie-talkie/client": "workspace:*",
+    "@walkie-talkie/react": "workspace:*",
     "@walkie-talkie/shared": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-webgl": "^0.18.0",

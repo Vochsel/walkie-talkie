@@ -286,13 +286,15 @@ export default function Page() {
         >
           <h1
             style={{
+              fontFamily: 'var(--font-gelasio), Georgia, serif',
               fontSize: 72,
-              fontWeight: 600,
+              fontWeight: 700,
               color: TEXT,
               margin: '0 0 24px 0',
-              letterSpacing: '-0.04em',
+              letterSpacing: '-0.02em',
               lineHeight: 1.05,
               maxWidth: 800,
+              fontStyle: 'normal',
             }}
           >
             Your terminal, anywhere.
@@ -327,7 +329,7 @@ export default function Page() {
             }}
           >
             <span style={{ color: 'rgba(237, 236, 236, 0.35)' }}>$ </span>
-            npx @vochsel/walkie-talkie@latest --open
+            npx @walkie-talkie/cli@latest --open
           </div>
           <p style={{ fontSize: 14, color: TEXT_MUTED }}>
             No install. No config. No signup.
@@ -674,13 +676,15 @@ export default function Page() {
         >
           <h2
             style={{
+              fontFamily: 'var(--font-gelasio), Georgia, serif',
               fontSize: 52,
-              fontWeight: 600,
+              fontWeight: 700,
               color: TEXT,
-              letterSpacing: '-0.04em',
+              letterSpacing: '-0.02em',
               lineHeight: 1.1,
               marginBottom: 20,
               maxWidth: 600,
+              fontStyle: 'normal',
             }}
           >
             One command. Real terminal. Any device.
@@ -703,7 +707,7 @@ export default function Page() {
             }}
           >
             <span style={{ color: 'rgba(237, 236, 236, 0.35)' }}>$ </span>
-            npx @vochsel/walkie-talkie@latest --open
+            npx @walkie-talkie/cli@latest --open
           </div>
           <a
             href="https://github.com/vochsel/walkie-talkie"

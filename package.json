@@ -4,15 +4,17 @@
   "scripts": {
     "dev:service": "pnpm --filter @walkie-talkie/service dev",
     "dev:web": "pnpm --filter @walkie-talkie/web dev",
-    "dev:cli": "pnpm --filter @vochsel/walkie-talkie dev",
+    "dev:cli": "pnpm --filter @walkie-talkie/cli dev",
     "dev:www": "pnpm --filter @walkie-talkie/www dev",
     "dev": "concurrently \"pnpm dev:cli\" \"pnpm dev:web\"",
     "build:shared": "pnpm --filter @walkie-talkie/shared build",
+    "build:client": "pnpm --filter @walkie-talkie/client build",
+    "build:react": "pnpm --filter @walkie-talkie/react build",
     "build:service": "pnpm --filter @walkie-talkie/service build",
-    "build:cli": "pnpm --filter @vochsel/walkie-talkie build",
+    "build:cli": "pnpm --filter @walkie-talkie/cli build",
     "build:web": "pnpm --filter @walkie-talkie/web build",
     "build:www": "pnpm --filter @walkie-talkie/www build",
-    "build": "pnpm build:shared && concurrently \"pnpm build:service\" \"pnpm build:cli\" \"pnpm build:web\" \"pnpm build:www\""
+    "build": "pnpm build:shared && pnpm build:client && pnpm build:react && concurrently \"pnpm build:service\" \"pnpm build:cli\" \"pnpm build:web\" \"pnpm build:www\""
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

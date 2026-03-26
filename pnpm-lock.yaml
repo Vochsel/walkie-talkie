@@ -52,6 +52,41 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  client:
+    dependencies:
+      '@walkie-talkie/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  react:
+    dependencies:
+      '@walkie-talkie/client':
+        specifier: workspace:*
+        version: link:../client
+      '@walkie-talkie/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@xterm/addon-fit':
+        specifier: ^0.10.0
+        version: 0.10.0(@xterm/xterm@5.5.0)
+      '@xterm/xterm':
+        specifier: ^5.5.0
+        version: 5.5.0
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   service:
     dependencies:
       '@ngrok/ngrok':
@@ -109,6 +144,12 @@ importers:
       '@types/three':
         specifier: ^0.183.1
         version: 0.183.1
+      '@walkie-talkie/client':
+        specifier: workspace:*
+        version: link:../client
+      '@walkie-talkie/react':
+        specifier: workspace:*
+        version: link:../react
       '@walkie-talkie/shared':
         specifier: workspace:*
         version: link:../shared

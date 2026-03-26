@@ -13,6 +13,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   ClientMessage,
   ServerMessage,
+  TerminalInfo,
 } from '@walkie-talkie/shared';
 
 interface AuthenticatedSocket extends WebSocket {
@@ -41,6 +42,8 @@ export class WalkieTalkieServer {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private port: number;
   private onStateChange: StateChangeCallback | null = null;
+  private sessionSockets: Map<string, AuthenticatedSocket> = new Map();
+  private sessionTerminals: Map<string, Set<string>> = new Map();
 
   constructor(port: number = DEFAULT_PORT) {
     this.port = port;
@@ -175,6 +178,8 @@ export class WalkieTalkieServer {
           const sessionId = this.tokenManager.consume(msg.token);
           if (sessionId) {
             ws.sessionId = sessionId;
+            this.sessionSockets.set(sessionId, ws);
+            this.sessionTerminals.set(sessionId, new Set());
             clearTimeout(authTimer);
             this.send(ws, { type: 'auth:ok', sessionId });
             this.notifyStateChange();
@@ -189,8 +194,37 @@ export class WalkieTalkieServer {
         if (msg.type === 'auth:resume') {
           if (this.tokenManager.validateSession(msg.sessionId)) {
             ws.sessionId = msg.sessionId;
+            this.sessionSockets.set(msg.sessionId, ws);
             clearTimeout(authTimer);
             this.send(ws, { type: 'auth:ok', sessionId: msg.sessionId });
+
+            // Re-send the terminal list and replay scrollback for this session
+            const terminalIds = this.sessionTerminals.get(msg.sessionId);
+            const terminals: TerminalInfo[] = [];
+            if (terminalIds) {
+              for (const id of terminalIds) {
+                const session = this.terminalManager.get(id);
+                if (session) {
+                  terminals.push(session.getInfo());
+                } else {
+                  terminalIds.delete(id);
+                }
+              }
+            }
+            this.send(ws, { type: 'terminal:list', terminals });
+
+            // Replay scrollback so terminals aren't blank
+            for (const t of terminals) {
+              const session = this.terminalManager.get(t.id);
+              if (session) {
+                const scrollback = session.getScrollback();
+                if (scrollback) {
+                  this.send(ws, { type: 'terminal:output', terminalId: t.id, data: scrollback });
+                }
+              }
+            }
+
+            this.notifyStateChange();
           } else {
             this.send(ws, { type: 'auth:fail', reason: 'invalid_session' });
             ws.close();
@@ -209,6 +243,13 @@ export class WalkieTalkieServer {
 
       ws.on('close', () => {
         clearTimeout(authTimer);
+        // Remove socket reference but keep session and terminals alive for reconnect
+        if (ws.sessionId) {
+          const currentWs = this.sessionSockets.get(ws.sessionId);
+          if (currentWs === ws) {
+            this.sessionSockets.delete(ws.sessionId);
+          }
+        }
       });
     });
 
@@ -234,9 +275,19 @@ export class WalkieTalkieServer {
           shell: msg.shell,
         });
 
-        // Wire up output
+        const sessionId = ws.sessionId!;
+
+        // Track terminal for this session
+        let termSet = this.sessionTerminals.get(sessionId);
+        if (!termSet) {
+          termSet = new Set();
+          this.sessionTerminals.set(sessionId, termSet);
+        }
+        termSet.add(session.id);
+
+        // Wire up output using session-based routing (survives reconnects)
         session.on('data', (data: string) => {
-          this.send(ws, {
+          this.sendToSession(sessionId, {
             type: 'terminal:output',
             terminalId: session.id,
             data,
@@ -244,11 +295,13 @@ export class WalkieTalkieServer {
         });
 
         session.on('exit', (exitCode: number) => {
-          this.send(ws, {
+          this.sendToSession(sessionId, {
             type: 'terminal:exited',
             terminalId: session.id,
             exitCode,
           });
+          const terms = this.sessionTerminals.get(sessionId);
+          if (terms) terms.delete(session.id);
           this.notifyStateChange();
         });
 
@@ -294,10 +347,16 @@ export class WalkieTalkieServer {
       }
 
       case 'terminal:list': {
-        this.send(ws, {
-          type: 'terminal:list',
-          terminals: this.terminalManager.list(),
-        });
+        const sessionId = ws.sessionId!;
+        const terminalIds = this.sessionTerminals.get(sessionId) ?? new Set();
+        const terminals: TerminalInfo[] = [];
+        for (const id of terminalIds) {
+          const session = this.terminalManager.get(id);
+          if (session) {
+            terminals.push(session.getInfo());
+          }
+        }
+        this.send(ws, { type: 'terminal:list', terminals });
         break;
       }
 
@@ -308,6 +367,13 @@ export class WalkieTalkieServer {
 
   private send(ws: WebSocket, msg: ServerMessage): void {
     if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private sendToSession(sessionId: string, msg: ServerMessage): void {
+    const ws = this.sessionSockets.get(sessionId);
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg));
     }
   }

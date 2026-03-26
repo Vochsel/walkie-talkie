@@ -9,6 +9,8 @@ export class TerminalSession extends EventEmitter {
   private shell: string;
   private cols: number;
   private rows: number;
+  private scrollback: string = '';
+  private static readonly MAX_SCROLLBACK = 100_000; // 100KB
 
   constructor(id: string, opts: { cols: number; rows: number; shell?: string }) {
     super();
@@ -28,6 +30,10 @@ export class TerminalSession extends EventEmitter {
     });
 
     this.ptyProcess.onData((data: string) => {
+      this.scrollback += data;
+      if (this.scrollback.length > TerminalSession.MAX_SCROLLBACK) {
+        this.scrollback = this.scrollback.slice(-TerminalSession.MAX_SCROLLBACK);
+      }
       this.emit('data', data);
     });
 
@@ -53,6 +59,10 @@ export class TerminalSession extends EventEmitter {
 
   kill(): void {
     this.ptyProcess.kill();
+  }
+
+  getScrollback(): string {
+    return this.scrollback;
   }
 
   getInfo(): TerminalInfo {

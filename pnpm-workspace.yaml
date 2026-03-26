@@ -1,5 +1,7 @@
 packages:
   - 'shared'
+  - 'client'
+  - 'react'
   - 'service'
   - 'cli'
   - 'web'

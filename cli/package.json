@@ -1,5 +1,5 @@
 {
-  "name": "@vochsel/walkie-talkie",
+  "name": "@walkie-talkie/cli",
   "version": "1.0.2",
   "description": "Remote terminal access from your browser",
   "bin": {

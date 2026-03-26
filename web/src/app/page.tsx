@@ -33,6 +33,7 @@ function AppContent() {
   const {
     connectionState,
     terminals,
+    isResuming,
     connect,
     resumeSession,
     disconnect,
@@ -73,12 +74,13 @@ function AppContent() {
     }
   }, [searchParams, connect, resumeSession]);
 
-  // When we connect, request a terminal
+  // When we fresh-connect (not resume), create a terminal.
+  // On resume, wait for the server to send terminal:list first.
   useEffect(() => {
-    if (connectionState === 'connected' && terminals.length === 0) {
+    if (connectionState === 'connected' && terminals.length === 0 && !isResuming) {
       createTerminal(80, 24);
     }
-  }, [connectionState, terminals.length, createTerminal]);
+  }, [connectionState, terminals.length, createTerminal, isResuming]);
 
   // Auto-select first terminal or maintain selection
   useEffect(() => {
