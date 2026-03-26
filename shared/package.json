@@ -1,7 +1,6 @@
 {
   "name": "@walkie-talkie/shared",
-  "version": "1.0.0",
-  "private": true,
+  "version": "1.0.1",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +9,10 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
