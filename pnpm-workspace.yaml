@@ -1,4 +1,6 @@
 packages:
   - 'shared'
   - 'service'
+  - 'cli'
   - 'web'
+  - 'www'

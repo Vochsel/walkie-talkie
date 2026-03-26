@@ -1,0 +1,30 @@
+{
+  "name": "walkie-talkie",
+  "version": "1.0.0",
+  "description": "Remote terminal access from your browser",
+  "bin": {
+    "walkie-talkie": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc && node dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "keywords": ["terminal", "remote", "pty", "websocket", "xterm"],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "node-pty": "^1.0.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0",
+    "@walkie-talkie/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  }
+}

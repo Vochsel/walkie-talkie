@@ -4,11 +4,15 @@
   "scripts": {
     "dev:service": "pnpm --filter @walkie-talkie/service dev",
     "dev:web": "pnpm --filter @walkie-talkie/web dev",
-    "dev": "concurrently \"pnpm dev:service\" \"pnpm dev:web\"",
+    "dev:cli": "pnpm --filter walkie-talkie dev",
+    "dev:www": "pnpm --filter @walkie-talkie/www dev",
+    "dev": "concurrently \"pnpm dev:cli\" \"pnpm dev:web\"",
     "build:shared": "pnpm --filter @walkie-talkie/shared build",
     "build:service": "pnpm --filter @walkie-talkie/service build",
+    "build:cli": "pnpm --filter walkie-talkie build",
     "build:web": "pnpm --filter @walkie-talkie/web build",
-    "build": "pnpm build:shared && concurrently \"pnpm build:service\" \"pnpm build:web\""
+    "build:www": "pnpm --filter @walkie-talkie/www build",
+    "build": "pnpm build:shared && concurrently \"pnpm build:service\" \"pnpm build:cli\" \"pnpm build:web\" \"pnpm build:www\""
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
