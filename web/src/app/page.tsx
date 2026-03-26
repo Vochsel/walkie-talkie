@@ -6,12 +6,25 @@ import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useWalkieTalkie } from '@/hooks/useWalkieTalkie';
 import ConnectScreen from '@/components/ConnectScreen';
-import TerminalTabs from '@/components/TerminalTabs';
 import ConnectionStatus from '@/components/ConnectionStatus';
+import ViewSwitcher, { ViewType } from '@/components/ViewSwitcher';
 
-const TerminalView = dynamic(() => import('@/components/TerminalView'), {
-  ssr: false,
-});
+const ClassicView = dynamic(() => import('@/components/views/ClassicView'), { ssr: false });
+const SidebarView = dynamic(() => import('@/components/views/SidebarView'), { ssr: false });
+const WhiteboardView = dynamic(() => import('@/components/views/WhiteboardView'), { ssr: false });
+const MinecraftView = dynamic(() => import('@/components/views/MinecraftView'), { ssr: false });
+const RpgView = dynamic(() => import('@/components/views/RpgView'), { ssr: false });
+
+export interface ViewProps {
+  terminals: ReturnType<typeof useWalkieTalkie>['terminals'];
+  activeTerminalId: string | null;
+  setActiveTerminalId: (id: string | null) => void;
+  sendInput: ReturnType<typeof useWalkieTalkie>['sendInput'];
+  resizeTerminal: ReturnType<typeof useWalkieTalkie>['resizeTerminal'];
+  killTerminal: ReturnType<typeof useWalkieTalkie>['killTerminal'];
+  createTerminal: ReturnType<typeof useWalkieTalkie>['createTerminal'];
+  registerOutputHandler: ReturnType<typeof useWalkieTalkie>['registerOutputHandler'];
+}
 
 function AppContent() {
   const searchParams = useSearchParams();
@@ -29,6 +42,7 @@ function AppContent() {
 
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<ViewType>('classic');
 
   // Auto-connect from QR code URL params
   useEffect(() => {
@@ -58,7 +72,6 @@ function AppContent() {
     }
   }, [terminals, activeTerminalId]);
 
-  // Track auth errors
   useEffect(() => {
     if (connectionState === 'error') {
       setConnectError('Authentication failed. Token may be expired or invalid.');
@@ -73,16 +86,10 @@ function AppContent() {
     [connect]
   );
 
-  const handleNewTerminal = useCallback(() => {
-    createTerminal(80, 24);
-  }, [createTerminal]);
-
-  // Show connect screen if not connected
   if (connectionState === 'disconnected' || connectionState === 'error') {
     return <ConnectScreen onConnect={handleConnect} error={connectError} />;
   }
 
-  // Loading state while connecting
   if (connectionState === 'connecting' || connectionState === 'authenticating') {
     return (
       <div style={styles.loading}>
@@ -94,35 +101,27 @@ function AppContent() {
     );
   }
 
+  const viewProps: ViewProps = {
+    terminals,
+    activeTerminalId,
+    setActiveTerminalId,
+    sendInput,
+    resizeTerminal,
+    killTerminal,
+    createTerminal,
+    registerOutputHandler,
+  };
+
   return (
     <div style={styles.app}>
-      <TerminalTabs
-        terminals={terminals}
-        activeId={activeTerminalId}
-        onSelect={setActiveTerminalId}
-        onClose={killTerminal}
-        onCreate={handleNewTerminal}
-      />
+      <ViewSwitcher current={currentView} onChange={setCurrentView} />
 
-      <div style={styles.terminalArea}>
-        {terminals.map((term) => (
-          <TerminalView
-            key={term.id}
-            terminalId={term.id}
-            isActive={term.id === activeTerminalId}
-            onInput={(data) => sendInput(term.id, data)}
-            onResize={(cols, rows) => resizeTerminal(term.id, cols, rows)}
-            registerOutput={(handler) => registerOutputHandler(term.id, handler)}
-          />
-        ))}
-        {terminals.length === 0 && (
-          <div style={styles.empty}>
-            <p>No terminals open</p>
-            <button style={styles.createBtn} onClick={handleNewTerminal}>
-              Create Terminal
-            </button>
-          </div>
-        )}
+      <div style={styles.viewArea}>
+        {currentView === 'classic' && <ClassicView {...viewProps} />}
+        {currentView === 'sidebar' && <SidebarView {...viewProps} />}
+        {currentView === 'whiteboard' && <WhiteboardView {...viewProps} />}
+        {currentView === 'minecraft' && <MinecraftView {...viewProps} />}
+        {currentView === 'rpg' && <RpgView {...viewProps} />}
       </div>
 
       <ConnectionStatus state={connectionState} onDisconnect={disconnect} />
@@ -151,29 +150,10 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100vh',
     overflow: 'hidden',
   },
-  terminalArea: {
+  viewArea: {
     flex: 1,
     overflow: 'hidden',
     position: 'relative',
-  },
-  empty: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#8b949e',
-    gap: 16,
-  },
-  createBtn: {
-    background: '#00d4aa',
-    color: '#0d1117',
-    border: 'none',
-    borderRadius: 6,
-    padding: '8px 20px',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
   },
   loading: {
     display: 'flex',
@@ -197,7 +177,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-// Add keyframe animation via a style tag
 if (typeof document !== 'undefined') {
   const styleEl = document.createElement('style');
   styleEl.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;

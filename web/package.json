@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@types/three": "^0.183.1",
+    "@walkie-talkie/shared": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
@@ -15,7 +17,7 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@walkie-talkie/shared": "workspace:*"
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
