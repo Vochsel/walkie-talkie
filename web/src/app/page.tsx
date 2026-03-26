@@ -50,35 +50,23 @@ function AppContent() {
 
   const autoResumedRef = useRef(false);
 
-  // Auto-connect or resume session
+  // Auto-connect from URL params or resume saved session
   useEffect(() => {
     if (!autoResumedRef.current) {
       autoResumedRef.current = true;
 
       const token = searchParams.get('token');
       const server = searchParams.get('server');
-      const serverUrl = server || `${window.location.protocol}//${window.location.hostname}:3456`;
 
-      // Check for an existing session we can resume (survives page refresh)
-      const saved = getSavedConnections();
-      const existing = saved.find((c) => c.serverUrl === serverUrl);
-      if (existing && Date.now() - existing.connectedAt < 24 * 60 * 60 * 1000) {
-        // Strip token from URL so future refreshes don't retry it
-        if (token) {
-          window.history.replaceState({}, '', window.location.pathname);
-        }
-        resumeSession(existing.serverUrl, existing.sessionId);
-        return;
-      }
-
-      // Fresh connect from QR code / URL params
+      // Token in URL = fresh connect (QR code link)
       if (token) {
-        window.history.replaceState({}, '', window.location.pathname);
+        const serverUrl = server || `${window.location.protocol}//${window.location.hostname}:3456`;
         connect(serverUrl, token);
         return;
       }
 
-      // Fall back to most recent saved connection
+      // No token in URL — try resuming most recent saved session
+      const saved = getSavedConnections();
       if (saved.length > 0) {
         const recent = saved[0];
         if (Date.now() - recent.connectedAt < 24 * 60 * 60 * 1000) {
@@ -87,6 +75,13 @@ function AppContent() {
       }
     }
   }, [searchParams, connect, resumeSession]);
+
+  // Strip token from URL after successful auth so refreshes use session resume
+  useEffect(() => {
+    if (connectionState === 'connected' && searchParams.get('token')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [connectionState, searchParams]);
 
   // When we fresh-connect (not resume), create a terminal.
   // On resume, wait for the server to send terminal:list first.
