@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
 import { usePersistedRef, usePersistedState } from '@/hooks/usePersistedState';
+import { loadState, saveState } from '@/lib/storage';
 
 // ── Block types ─────────────────────────────────────────────────────
 type BlockType = 'grass' | 'dirt' | 'stone' | 'wood' | 'leaves' | 'sand' | 'glass' | 'terminal';
@@ -118,11 +119,47 @@ function mulberry32(seed: number) {
 // ── Voxel world ─────────────────────────────────────────────────────
 function posKey(x: number, y: number, z: number) { return `${x},${y},${z}`; }
 
+// World diff: tracks user modifications from the generated world
+interface WorldDiff {
+  added: Record<string, BlockType>;   // posKey -> type (blocks placed by user)
+  removed: string[];                   // posKeys of blocks broken by user
+}
+
 class VoxelWorld {
   blocks = new Map<string, BlockType>();
+  // Track original generated state for diffing
+  private generated = new Set<string>();
+  private userAdded = new Map<string, BlockType>();
+  private userRemoved = new Set<string>();
 
   set(x: number, y: number, z: number, type: BlockType) {
-    this.blocks.set(posKey(x, y, z), type);
+    const key = posKey(x, y, z);
+    this.blocks.set(key, type);
+  }
+
+  // Called after initial world gen to snapshot the base state
+  snapshotGenerated() {
+    this.generated = new Set(this.blocks.keys());
+  }
+
+  // Track a user modification (place)
+  userSet(x: number, y: number, z: number, type: BlockType) {
+    const key = posKey(x, y, z);
+    this.blocks.set(key, type);
+    this.userRemoved.delete(key);
+    if (!this.generated.has(key) || this.blocks.get(key) !== type) {
+      this.userAdded.set(key, type);
+    }
+  }
+
+  // Track a user modification (break)
+  userDelete(x: number, y: number, z: number) {
+    const key = posKey(x, y, z);
+    this.blocks.delete(key);
+    this.userAdded.delete(key);
+    if (this.generated.has(key)) {
+      this.userRemoved.add(key);
+    }
   }
 
   get(x: number, y: number, z: number): BlockType | undefined {
@@ -154,6 +191,22 @@ class VoxelWorld {
       arr.push(new THREE.Vector3(x, y, z));
     }
     return groups;
+  }
+
+  exportDiff(): WorldDiff {
+    return {
+      added: Object.fromEntries(this.userAdded),
+      removed: Array.from(this.userRemoved),
+    };
+  }
+
+  applyDiff(diff: WorldDiff) {
+    for (const key of diff.removed) {
+      this.blocks.delete(key);
+    }
+    for (const [key, type] of Object.entries(diff.added)) {
+      this.blocks.set(key, type);
+    }
   }
 }
 
@@ -226,6 +279,7 @@ function generateWorld(): VoxelWorld {
     }
   }
 
+  world.snapshotGenerated();
   return world;
 }
 
@@ -278,71 +332,76 @@ function buildWorldMeshes(
 }
 
 // ── AABB collision ──────────────────────────────────────────────────
-function checkCollisionAxis(
-  world: VoxelWorld,
-  pos: THREE.Vector3,
-  velocity: THREE.Vector3,
-  axis: 'x' | 'y' | 'z',
-  dt: number,
-  halfW: number,
-  bodyH: number,
-  eyeH: number,
-): { newPos: number; newVel: number; grounded: boolean } {
-  const newVal = pos[axis] + velocity[axis] * dt;
-  let grounded = false;
+const EPSILON = 0.001; // prevents floating-point boundary issues
 
-  // Compute AABB of player at new position
-  const testPos = pos.clone();
-  if (axis === 'y') {
-    // Y is the eye position, bottom of player is y - eyeH, top is y - eyeH + bodyH
-    testPos.y = newVal;
-  } else {
-    testPos[axis] = newVal;
-  }
+function playerAABB(pos: THREE.Vector3, hw: number, bodyH: number, eyeH: number) {
+  return {
+    minX: pos.x - hw, maxX: pos.x + hw,
+    minY: pos.y - eyeH, maxY: pos.y - eyeH + bodyH,
+    minZ: pos.z - hw, maxZ: pos.z + hw,
+  };
+}
 
-  const bottom = testPos.y - eyeH;
-  const top = bottom + bodyH;
-  const minX = testPos.x - halfW;
-  const maxX = testPos.x + halfW;
-  const minZ = testPos.z - halfW;
-  const maxZ = testPos.z + halfW;
+function overlapsBlock(
+  minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number,
+  bx: number, by: number, bz: number,
+): boolean {
+  return maxX > bx + EPSILON && minX < bx + 1 - EPSILON &&
+         maxY > by + EPSILON && minY < by + 1 - EPSILON &&
+         maxZ > bz + EPSILON && minZ < bz + 1 - EPSILON;
+}
 
-  // Check all blocks the AABB overlaps
-  const bMinX = Math.floor(minX);
-  const bMaxX = Math.floor(maxX);
-  const bMinY = Math.floor(bottom);
-  const bMaxY = Math.floor(top);
-  const bMinZ = Math.floor(minZ);
-  const bMaxZ = Math.floor(maxZ);
-
-  for (let bx = bMinX; bx <= bMaxX; bx++) {
-    for (let by = bMinY; by <= bMaxY; by++) {
-      for (let bz = bMinZ; bz <= bMaxZ; bz++) {
-        if (!world.isSolid(bx, by, bz)) continue;
-
-        // Block AABB: [bx, bx+1] x [by, by+1] x [bz, bz+1]
-        if (maxX > bx && minX < bx + 1 &&
-            top > by && bottom < by + 1 &&
-            maxZ > bz && minZ < bz + 1) {
-          // Collision on this axis
-          if (axis === 'y') {
-            if (velocity.y < 0) {
-              // Landing on top of block
-              grounded = true;
-              return { newPos: by + 1 + eyeH, newVel: 0, grounded };
-            } else {
-              // Hitting ceiling
-              return { newPos: by - bodyH + eyeH, newVel: 0, grounded };
-            }
-          } else {
-            return { newPos: pos[axis], newVel: 0, grounded };
-          }
+// Check if player at position overlaps any solid block
+function isPlayerColliding(world: VoxelWorld, pos: THREE.Vector3, hw: number, bodyH: number, eyeH: number): boolean {
+  const bb = playerAABB(pos, hw, bodyH, eyeH);
+  for (let bx = Math.floor(bb.minX); bx <= Math.floor(bb.maxX); bx++) {
+    for (let by = Math.floor(bb.minY); by <= Math.floor(bb.maxY); by++) {
+      for (let bz = Math.floor(bb.minZ); bz <= Math.floor(bb.maxZ); bz++) {
+        if (world.isSolid(bx, by, bz) && overlapsBlock(bb.minX, bb.maxX, bb.minY, bb.maxY, bb.minZ, bb.maxZ, bx, by, bz)) {
+          return true;
         }
       }
     }
   }
+  return false;
+}
 
-  return { newPos: newVal, newVel: velocity[axis], grounded };
+// Check if there's a solid block directly below the player's feet
+function isOnGround(world: VoxelWorld, pos: THREE.Vector3, hw: number, eyeH: number): boolean {
+  const feetY = pos.y - eyeH;
+  const checkY = feetY - EPSILON * 2;
+  // Check a few points under the player's feet
+  for (const dx of [-hw + EPSILON, 0, hw - EPSILON]) {
+    for (const dz of [-hw + EPSILON, 0, hw - EPSILON]) {
+      if (world.isSolid(Math.floor(pos.x + dx), Math.floor(checkY), Math.floor(pos.z + dz))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function resolveAxis(
+  world: VoxelWorld,
+  pos: THREE.Vector3,
+  vel: THREE.Vector3,
+  axis: 'x' | 'y' | 'z',
+  dt: number,
+  hw: number,
+  bodyH: number,
+  eyeH: number,
+): number {
+  const newVal = pos[axis] + vel[axis] * dt;
+  const testPos = pos.clone();
+  testPos[axis] = newVal;
+
+  if (isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
+    // Collision — don't move on this axis
+    vel[axis] = 0;
+    return pos[axis];
+  }
+
+  return newVal;
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -463,6 +522,9 @@ export default function MinecraftView({
 
     // Generate world
     const world = generateWorld();
+    // Apply saved world modifications
+    const savedDiff = loadState<WorldDiff | null>('mc:worldDiff', null);
+    if (savedDiff) world.applyDiff(savedDiff);
     worldRef.current = world;
 
     // Validate player position — push above terrain if stuck
@@ -616,8 +678,9 @@ export default function MinecraftView({
           syncTerminalMaps();
         }
 
-        world.delete(blockPos.x, blockPos.y, blockPos.z);
+        world.userDelete(blockPos.x, blockPos.y, blockPos.z);
         meshDirtyRef.current = true;
+        saveState('mc:worldDiff', world.exportDiff());
 
       } else if (e.button === 2) {
         // Right click: PLACE block or open terminal
@@ -646,8 +709,9 @@ export default function MinecraftView({
         }
 
         const selectedBlock = HOTBAR_BLOCKS[selectedSlotRef.current];
-        world.set(placePos.x, placePos.y, placePos.z, selectedBlock);
+        world.userSet(placePos.x, placePos.y, placePos.z, selectedBlock);
         meshDirtyRef.current = true;
+        saveState('mc:worldDiff', world.exportDiff());
 
         // If placing a terminal block, create a terminal
         if (selectedBlock === 'terminal') {
@@ -704,24 +768,17 @@ export default function MinecraftView({
         velocityRef.current.y += GRAVITY * dt;
         if (velocityRef.current.y < MAX_FALL_SPEED) velocityRef.current.y = MAX_FALL_SPEED;
 
-        // Resolve collisions axis by axis (Y first for landing, then X, then Z)
         const vel = velocityRef.current;
         const pos = playerPosRef.current;
         const hw = PLAYER_WIDTH / 2;
 
-        const yResult = checkCollisionAxis(world, pos, vel, 'y', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.y = yResult.newPos;
-        vel.y = yResult.newVel;
-        if (yResult.grounded) onGroundRef.current = true;
-        else if (vel.y !== 0) onGroundRef.current = false;
+        // Resolve Y first (gravity/jump), then X, then Z
+        pos.y = resolveAxis(world, pos, vel, 'y', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        pos.x = resolveAxis(world, pos, vel, 'x', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
+        pos.z = resolveAxis(world, pos, vel, 'z', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
 
-        const xResult = checkCollisionAxis(world, pos, vel, 'x', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.x = xResult.newPos;
-        vel.x = xResult.newVel;
-
-        const zResult = checkCollisionAxis(world, pos, vel, 'z', dt, hw, PLAYER_BODY_HEIGHT, PLAYER_HEIGHT);
-        pos.z = zResult.newPos;
-        vel.z = zResult.newVel;
+        // Ground detection — check every frame
+        onGroundRef.current = isOnGround(world, pos, hw, PLAYER_HEIGHT);
 
         // Safety: don't fall into the void
         if (pos.y < -10) {
@@ -804,7 +861,7 @@ export default function MinecraftView({
       if (!currentIds.has(id)) {
         const pos = terminalPositionsRef.current.get(id);
         if (pos) {
-          world.delete(pos.x, pos.y, pos.z);
+          world.userDelete(pos.x, pos.y, pos.z);
           posToTerminalRef.current.delete(posKey(pos.x, pos.y, pos.z));
           meshDirtyRef.current = true;
         }
@@ -830,11 +887,10 @@ export default function MinecraftView({
                 if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
                 const px = cx + dx, pz = cz + dz;
                 if (px < 0 || px >= WORLD_SIZE || pz < 0 || pz >= WORLD_SIZE) continue;
-                // Find top
                 for (let y = 10; y >= 0; y--) {
                   if (world.has(px, y, pz) && !world.has(px, y + 1, pz)) {
                     const pos = new THREE.Vector3(px, y + 1, pz);
-                    world.set(px, y + 1, pz, 'terminal');
+                    world.userSet(px, y + 1, pz, 'terminal');
                     terminalPositionsRef.current.set(t.id, pos);
                     posToTerminalRef.current.set(posKey(px, y + 1, pz), t.id);
                     meshDirtyRef.current = true;
@@ -849,6 +905,7 @@ export default function MinecraftView({
         }
       }
     }
+    saveState('mc:worldDiff', world.exportDiff());
     syncTerminalMaps();
   }, [terminals, syncTerminalMaps]);
 
