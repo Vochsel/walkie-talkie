@@ -18,6 +18,7 @@ function parseArgs() {
   let port = DEFAULT_PORT;
   let force = false;
   let open = false;
+  let dir = process.cwd();
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -35,10 +36,14 @@ function parseArgs() {
       force = true;
     } else if (arg === '--open' || arg === '-o') {
       open = true;
+    } else if (arg.startsWith('--dir=')) {
+      dir = arg.split('=')[1];
+    } else if ((arg === '-d') && i + 1 < args.length) {
+      dir = args[++i];
     }
   }
 
-  return { port, force, open };
+  return { port, force, open, dir };
 }
 
 function printHelp() {
@@ -51,6 +56,7 @@ function printHelp() {
 
   ${BOLD}OPTIONS${RESET}
     ${WHITE}-p, --port=<number>${RESET}  ${DIM}Port to listen on (default: ${DEFAULT_PORT})${RESET}
+    ${WHITE}-d, --dir=<path>${RESET}    ${DIM}Working directory for terminals (default: cwd)${RESET}
     ${WHITE}-f, --force${RESET}          ${DIM}Kill existing process on the port${RESET}
     ${WHITE}-o, --open${RESET}           ${DIM}Open browser automatically${RESET}
     ${WHITE}-h, --help${RESET}           ${DIM}Show this help message${RESET}
@@ -93,7 +99,7 @@ function killPort(port: number): Promise<void> {
 }
 
 async function main() {
-  const { port, force, open } = parseArgs();
+  const { port, force, open, dir } = parseArgs();
 
   banner();
 
@@ -110,7 +116,7 @@ async function main() {
     }
   }
 
-  const server = createServer(port);
+  const server = createServer(port, dir);
   await server.start();
 
   const token = server.generateToken();

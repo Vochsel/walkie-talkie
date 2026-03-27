@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import * as pty from 'node-pty';
 import { randomBytes, randomUUID } from 'crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 import QRCode from 'qrcode';
 import {
@@ -30,17 +30,19 @@ class TerminalSession {
   private shell: string;
   private cols: number;
   private rows: number;
+  private cwd: string;
   private scrollback = '';
   private listeners: { data: ((d: string) => void)[]; exit: ((code: number) => void)[] } = { data: [], exit: [] };
 
-  constructor(id: string, cols: number, rows: number, shell?: string) {
+  constructor(id: string, cols: number, rows: number, shell?: string, cwd?: string) {
     this.id = id;
     this.cols = cols;
     this.rows = rows;
+    this.cwd = cwd || process.env.HOME || process.env.USERPROFILE || '/';
     this.shell = shell || (process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash');
     this.pty = pty.spawn(this.shell, [], {
       name: 'xterm-256color', cols, rows,
-      cwd: process.env.HOME || process.env.USERPROFILE || '/',
+      cwd: this.cwd,
       env: process.env as Record<string, string>,
     });
     this.pty.onData((d) => {
@@ -60,7 +62,7 @@ class TerminalSession {
   kill() { this.pty.kill(); }
   getScrollback() { return this.scrollback; }
   getInfo(): TerminalInfo {
-    return { id: this.id, pid: this.pty.pid, shell: this.shell, cols: this.cols, rows: this.rows, cwd: process.cwd(), createdAt: this.createdAt };
+    return { id: this.id, pid: this.pty.pid, shell: this.shell, cols: this.cols, rows: this.rows, cwd: this.cwd, createdAt: this.createdAt };
   }
 }
 
@@ -114,7 +116,8 @@ class TokenManager {
 // ── Server ──────────────────────────────────────────────────────────
 interface AuthSocket extends WebSocket { sessionId?: string; isAlive?: boolean; }
 
-export function createServer(port: number = DEFAULT_PORT) {
+export function createServer(port: number = DEFAULT_PORT, cwd?: string) {
+  const terminalCwd = cwd ? resolve(cwd) : undefined;
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -225,7 +228,7 @@ export function createServer(port: number = DEFAULT_PORT) {
           const id = randomUUID();
           const sessionId = ws.sessionId!;
           try {
-            const sess = new TerminalSession(id, msg.cols, msg.rows, msg.shell);
+            const sess = new TerminalSession(id, msg.cols, msg.rows, msg.shell, terminalCwd);
             terminals.set(id, sess);
 
             let termSet = sessionTerminals.get(sessionId);

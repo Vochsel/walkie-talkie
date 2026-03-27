@@ -26,7 +26,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@walkie-talkie/shared": "^1.0.2"
+    "@walkie-talkie/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

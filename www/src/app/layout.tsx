@@ -12,6 +12,15 @@ const gelasio = Gelasio({
 export const metadata: Metadata = {
   title: 'Walkie-Talkie — Remote Terminal Access',
   description: 'Access your terminal from any browser. One command to start, QR code to connect.',
+  openGraph: {
+    title: 'Walkie-Talkie — Remote Terminal Access',
+    description: 'Access your terminal from any browser. One command to start, QR code to connect.',
+    images: [{ url: '/og.svg' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/og.svg'],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

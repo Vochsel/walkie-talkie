@@ -30,8 +30,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@walkie-talkie/client": "^1.0.2",
-    "@walkie-talkie/shared": "^1.0.2"
+    "@walkie-talkie/client": "workspace:*",
+    "@walkie-talkie/shared": "workspace:*"
   },
   "peerDependencies": {
     "@xterm/addon-fit": ">=0.10.0",
