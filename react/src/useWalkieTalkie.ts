@@ -14,6 +14,7 @@ export function useWalkieTalkie() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [isResuming, setIsResuming] = useState(false);
+  const [errorReason, setErrorReason] = useState<string | null>(null);
   const outputHandlersRef = useRef<Map<string, (data: string) => void>>(new Map());
   const outputBuffersRef = useRef<Map<string, string>>(new Map());
 
@@ -23,6 +24,7 @@ export function useWalkieTalkie() {
 
     const unsubState = client.onStateChange((state) => {
       setConnectionState(state);
+      setErrorReason(client.errorReason);
 
       // Sync resume flag from client (covers both explicit resume and auto-reconnect)
       if (state === 'connected') {
@@ -146,6 +148,7 @@ export function useWalkieTalkie() {
     connectionState,
     terminals,
     isResuming,
+    errorReason,
     connect,
     resumeSession,
     disconnect,

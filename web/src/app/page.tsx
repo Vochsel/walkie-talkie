@@ -35,6 +35,7 @@ function AppContent() {
     connectionState,
     terminals,
     isResuming,
+    errorReason,
     connect,
     resumeSession,
     disconnect,
@@ -106,9 +107,11 @@ function AppContent() {
 
   useEffect(() => {
     if (connectionState === 'error') {
-      setConnectError('Authentication failed. Session may have expired — try a new token.');
+      setConnectError(
+        errorReason || 'Authentication failed. Session may have expired — try a new token.'
+      );
     }
-  }, [connectionState]);
+  }, [connectionState, errorReason]);
 
   const handleConnect = useCallback(
     (serverUrl: string, token: string) => {

@@ -24,6 +24,7 @@ export class WalkieTalkieClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private _isResuming = false;
+  private _errorReason: string | null = null;
 
   onMessage(handler: MessageHandler): () => void {
     this.messageHandlers.add(handler);
@@ -38,6 +39,7 @@ export class WalkieTalkieClient {
   connect(serverUrl: string, token: string): void {
     this.intentionalClose = false;
     this._isResuming = false;
+    this._errorReason = null;
     this._serverUrl = serverUrl;
     this.token = token;
     this._sessionId = null;
@@ -46,6 +48,7 @@ export class WalkieTalkieClient {
 
   resumeSession(serverUrl: string, sessionId: string): void {
     this.intentionalClose = false;
+    this._errorReason = null;
     this._serverUrl = serverUrl;
     this.token = '';
     this._sessionId = sessionId;
@@ -89,6 +92,10 @@ export class WalkieTalkieClient {
     return this._isResuming;
   }
 
+  get errorReason(): string | null {
+    return this._errorReason;
+  }
+
   private doConnect(): void {
     if (this.ws) {
       this.ws.close();
@@ -98,6 +105,19 @@ export class WalkieTalkieClient {
     // Mark as resume if we have an existing sessionId (explicit resume or auto-reconnect)
     if (this._sessionId) {
       this._isResuming = true;
+    }
+
+    // Detect mixed content: HTTPS page trying to connect to HTTP/WS server
+    if (
+      typeof window !== 'undefined' &&
+      window.location.protocol === 'https:' &&
+      this._serverUrl.startsWith('http://')
+    ) {
+      this._errorReason =
+        'Cannot connect to an insecure server (http://) from a secure page (https://). ' +
+        'Use the CLI server\'s --tls flag, or access this page over http:// instead.';
+      this.setState('error');
+      return;
     }
 
     const httpUrl = this._serverUrl.replace(/\/$/, '');
