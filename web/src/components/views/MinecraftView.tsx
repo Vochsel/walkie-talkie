@@ -519,9 +519,10 @@ function createAllGeometries(): Map<BlockType, THREE.BoxGeometry> {
 }
 
 // ── Low-poly CRT computer model for terminal blocks ─────────────────
-function createCRTModel(position: THREE.Vector3): THREE.Group {
+function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   const group = new THREE.Group();
   group.position.copy(position);
+  group.rotation.y = yaw;
   group.userData.blockType = 'terminal';
 
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a2a3d });
@@ -581,6 +582,7 @@ function buildWorldMeshes(
   world: VoxelWorld,
   materials: Map<BlockType, THREE.Material | THREE.Material[]>,
   geometries: Map<BlockType, THREE.BoxGeometry>,
+  terminalRotations?: Map<string, number>,
 ): THREE.Object3D[] {
   const groups = world.grouped();
   const meshes: THREE.Object3D[] = [];
@@ -591,7 +593,9 @@ function buildWorldMeshes(
     // Terminal blocks use a custom CRT model instead of instanced cubes
     if (type === 'terminal') {
       for (const pos of positions) {
-        meshes.push(createCRTModel(pos));
+        const key = posKey(pos.x, pos.y, pos.z);
+        const yaw = terminalRotations?.get(key) ?? 0;
+        meshes.push(createCRTModel(pos, yaw));
       }
       continue;
     }
@@ -630,17 +634,17 @@ function overlapsBlock(
   minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number,
   bx: number, by: number, bz: number,
 ): boolean {
-  return maxX > bx + EPSILON && minX < bx + 1 - EPSILON &&
-         maxY > by + EPSILON && minY < by + 1 - EPSILON &&
-         maxZ > bz + EPSILON && minZ < bz + 1 - EPSILON;
+  return maxX > bx - 0.5 + EPSILON && minX < bx + 0.5 - EPSILON &&
+         maxY > by - 0.5 + EPSILON && minY < by + 0.5 - EPSILON &&
+         maxZ > bz - 0.5 + EPSILON && minZ < bz + 0.5 - EPSILON;
 }
 
 // Check if player at position overlaps any solid block
 function isPlayerColliding(world: VoxelWorld, pos: THREE.Vector3, hw: number, bodyH: number, eyeH: number): boolean {
   const bb = playerAABB(pos, hw, bodyH, eyeH);
-  for (let bx = Math.floor(bb.minX); bx <= Math.floor(bb.maxX); bx++) {
-    for (let by = Math.floor(bb.minY); by <= Math.floor(bb.maxY); by++) {
-      for (let bz = Math.floor(bb.minZ); bz <= Math.floor(bb.maxZ); bz++) {
+  for (let bx = Math.round(bb.minX); bx <= Math.round(bb.maxX); bx++) {
+    for (let by = Math.round(bb.minY); by <= Math.round(bb.maxY); by++) {
+      for (let bz = Math.round(bb.minZ); bz <= Math.round(bb.maxZ); bz++) {
         if (world.isSolid(bx, by, bz) && overlapsBlock(bb.minX, bb.maxX, bb.minY, bb.maxY, bb.minZ, bb.maxZ, bx, by, bz)) {
           return true;
         }
@@ -657,7 +661,7 @@ function isOnGround(world: VoxelWorld, pos: THREE.Vector3, hw: number, eyeH: num
   // Check a few points under the player's feet
   for (const dx of [-hw + EPSILON, 0, hw - EPSILON]) {
     for (const dz of [-hw + EPSILON, 0, hw - EPSILON]) {
-      if (world.isSolid(Math.floor(pos.x + dx), Math.floor(checkY), Math.floor(pos.z + dz))) {
+      if (world.isSolid(Math.round(pos.x + dx), Math.round(checkY), Math.round(pos.z + dz))) {
         return true;
       }
     }
@@ -696,14 +700,14 @@ function resolveY(
     if (vel.y <= 0) {
       // Falling: snap feet to top of the highest block below
       const feetY = targetY - eyeH;
-      const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
-      const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+      const bx1 = Math.round(pos.x - hw), bx2 = Math.round(pos.x + hw);
+      const bz1 = Math.round(pos.z - hw), bz2 = Math.round(pos.z + hw);
       let highestTop = -Infinity;
       for (let bx = bx1; bx <= bx2; bx++) {
         for (let bz = bz1; bz <= bz2; bz++) {
-          for (let by = Math.floor(feetY); by >= Math.floor(feetY) - 1; by--) {
+          for (let by = Math.round(feetY); by >= Math.round(feetY) - 1; by--) {
             if (world.isSolid(bx, by, bz)) {
-              highestTop = Math.max(highestTop, by + 1);
+              highestTop = Math.max(highestTop, by + 0.5);
             }
           }
         }
@@ -715,14 +719,14 @@ function resolveY(
     } else {
       // Rising: snap head to bottom of the lowest block above
       const headY = targetY - eyeH + bodyH;
-      const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
-      const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+      const bx1 = Math.round(pos.x - hw), bx2 = Math.round(pos.x + hw);
+      const bz1 = Math.round(pos.z - hw), bz2 = Math.round(pos.z + hw);
       let lowestBottom = Infinity;
       for (let bx = bx1; bx <= bx2; bx++) {
         for (let bz = bz1; bz <= bz2; bz++) {
-          for (let by = Math.floor(headY); by <= Math.floor(headY) + 1; by++) {
+          for (let by = Math.round(headY); by <= Math.round(headY) + 1; by++) {
             if (world.isSolid(bx, by, bz)) {
-              lowestBottom = Math.min(lowestBottom, by);
+              lowestBottom = Math.min(lowestBottom, by - 0.5);
             }
           }
         }
@@ -818,6 +822,8 @@ export default function MinecraftView({
   );
   const { ref: posToTermObjRef, save: savePosToTerm } = usePersistedRef<Record<string, string>>('mc:posToTerm', {});
   const posToTerminalRef = useRef<Map<string, string>>(new Map(Object.entries(posToTermObjRef.current)));
+  const { ref: termRotObjRef, save: saveTermRots } = usePersistedRef<Record<string, number>>('mc:termRots', {});
+  const terminalRotationsRef = useRef<Map<string, number>>(new Map(Object.entries(termRotObjRef.current).map(([k, v]) => [k, v])));
   const pendingPlacementRef = useRef<THREE.Vector3 | null>(null);
 
   const syncTerminalMaps = useCallback(() => {
@@ -827,7 +833,9 @@ export default function MinecraftView({
     saveTermPositions();
     posToTermObjRef.current = Object.fromEntries(posToTerminalRef.current);
     savePosToTerm();
-  }, [termPosObjRef, saveTermPositions, posToTermObjRef, savePosToTerm]);
+    termRotObjRef.current = Object.fromEntries(terminalRotationsRef.current);
+    saveTermRots();
+  }, [termPosObjRef, saveTermPositions, posToTermObjRef, savePosToTerm, termRotObjRef, saveTermRots]);
 
   // Keep selectedSlotRef in sync
   useEffect(() => { selectedSlotRef.current = selectedSlot; }, [selectedSlot]);
@@ -842,7 +850,7 @@ export default function MinecraftView({
       if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
     }
 
-    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries);
+    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries, terminalRotationsRef.current);
     for (const m of s.worldMeshes) s.scene.add(m);
   }, []);
 
@@ -889,13 +897,13 @@ export default function MinecraftView({
       const pos = playerPosRef.current;
       const hw = PLAYER_WIDTH / 2;
       const bottom = pos.y - PLAYER_EYE_HEIGHT;
-      const bx = Math.floor(pos.x);
-      const bz = Math.floor(pos.z);
+      const bx = Math.round(pos.x);
+      const bz = Math.round(pos.z);
       let stuck = false;
-      for (let by = Math.floor(bottom); by <= Math.floor(bottom + PLAYER_BODY_HEIGHT); by++) {
-        if (world.isSolid(bx, by, bz) || world.isSolid(Math.floor(pos.x - hw), by, bz) ||
-            world.isSolid(Math.floor(pos.x + hw), by, bz) || world.isSolid(bx, by, Math.floor(pos.z - hw)) ||
-            world.isSolid(bx, by, Math.floor(pos.z + hw))) {
+      for (let by = Math.round(bottom); by <= Math.round(bottom + PLAYER_BODY_HEIGHT); by++) {
+        if (world.isSolid(bx, by, bz) || world.isSolid(Math.round(pos.x - hw), by, bz) ||
+            world.isSolid(Math.round(pos.x + hw), by, bz) || world.isSolid(bx, by, Math.round(pos.z - hw)) ||
+            world.isSolid(bx, by, Math.round(pos.z + hw))) {
           stuck = true;
           break;
         }
@@ -905,7 +913,7 @@ export default function MinecraftView({
         let safeY = 1;
         for (let y = UNDERGROUND_DEPTH; y < 30; y++) {
           if (world.isSolid(bx, y, bz) && !world.isSolid(bx, y + 1, bz) && !world.isSolid(bx, y + 2, bz)) {
-            safeY = y + 1 + PLAYER_EYE_HEIGHT;
+            safeY = y + 0.5 + PLAYER_EYE_HEIGHT;
           }
         }
         pos.set(pos.x, safeY, pos.z);
@@ -922,7 +930,7 @@ export default function MinecraftView({
 
     const geometries = createAllGeometries();
     const materials = createAllMaterials(texture);
-    const worldMeshes = buildWorldMeshes(world, materials, geometries);
+    const worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current);
     for (const m of worldMeshes) scene.add(m);
 
     // Block highlight wireframe
@@ -972,6 +980,15 @@ export default function MinecraftView({
       const num = parseInt(e.key);
       if (num >= 1 && num <= 9) {
         setSelectedSlot(num - 1);
+      }
+      // E to interact with terminal
+      if (k === 'e' && document.pointerLockElement === canvas) {
+        const hit = raycastBlock();
+        if (hit && hit.blockType === 'terminal' && hit.terminalId) {
+          document.exitPointerLock();
+          setPopupTerminalId(hit.terminalId);
+          setActiveTerminalId(hit.terminalId);
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
@@ -1028,21 +1045,31 @@ export default function MinecraftView({
       const hit = raycastBlock();
       if (!hit) return;
 
+      if (e.button === 1) {
+        // Middle click: PICK block type
+        e.preventDefault();
+        const idx = HOTBAR_BLOCKS.indexOf(hit.blockType);
+        if (idx !== -1) setSelectedSlot(idx);
+        return;
+      }
+
       if (e.button === 0) {
         // Left click: BREAK block
         const { blockPos, blockType, terminalId } = hit;
-        if (blockPos.y === 0 && blockType !== 'terminal') return; // don't break bottom layer
+        if (blockType === 'bedrock') return; // don't break bedrock
 
         // If it's a terminal block, kill the terminal
         if (blockType === 'terminal' && terminalId) {
           killTerminal(terminalId);
           const key = posKey(blockPos.x, blockPos.y, blockPos.z);
           posToTerminalRef.current.delete(key);
+          terminalRotationsRef.current.delete(key);
           terminalPositionsRef.current.delete(terminalId);
           syncTerminalMaps();
         }
 
         world.userDelete(blockPos.x, blockPos.y, blockPos.z);
+        highlightMesh.visible = false;
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
 
@@ -1066,9 +1093,9 @@ export default function MinecraftView({
         const pBottom = playerPosRef.current.y - PLAYER_EYE_HEIGHT;
         const pTop = pBottom + PLAYER_BODY_HEIGHT;
         const hw = PLAYER_WIDTH / 2;
-        if (placePos.x + 1 > playerPosRef.current.x - hw && placePos.x < playerPosRef.current.x + hw &&
-            placePos.y + 1 > pBottom && placePos.y < pTop &&
-            placePos.z + 1 > playerPosRef.current.z - hw && placePos.z < playerPosRef.current.z + hw) {
+        if (placePos.x + 0.5 > playerPosRef.current.x - hw && placePos.x - 0.5 < playerPosRef.current.x + hw &&
+            placePos.y + 0.5 > pBottom && placePos.y - 0.5 < pTop &&
+            placePos.z + 0.5 > playerPosRef.current.z - hw && placePos.z - 0.5 < playerPosRef.current.z + hw) {
           return; // would be inside player
         }
 
@@ -1077,15 +1104,20 @@ export default function MinecraftView({
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
 
-        // If placing a terminal block, create a terminal
+        // If placing a terminal block, create a terminal facing the player
         if (selectedBlock === 'terminal') {
           pendingPlacementRef.current = placePos.clone();
+          // Snap to nearest 90° facing the player
+          const raw = yawRef.current + Math.PI;
+          const snapped = Math.round(raw / (Math.PI / 2)) * (Math.PI / 2);
+          terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
           createTerminal(80, 24);
         }
       }
     };
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('auxclick', (e) => e.preventDefault());
 
     // ── Resize ──────────────────────────────────────────────────────
     const onResize = () => {
@@ -1199,7 +1231,7 @@ export default function MinecraftView({
           let wouldFall = true;
           for (const dx of [-hw + EPSILON, 0, hw - EPSILON]) {
             for (const dz of [-hw + EPSILON, 0, hw - EPSILON]) {
-              if (world.isSolid(Math.floor(testX + dx), Math.floor(feetY - EPSILON * 2), Math.floor(testZ + dz))) {
+              if (world.isSolid(Math.round(testX + dx), Math.round(feetY - EPSILON * 2), Math.round(testZ + dz))) {
                 wouldFall = false;
               }
             }
@@ -1274,7 +1306,7 @@ export default function MinecraftView({
             });
           }
         }
-        state.worldMeshes = buildWorldMeshes(world, materials, geometries);
+        state.worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current);
         for (const m of state.worldMeshes) scene.add(m);
         meshDirtyRef.current = false;
         lastMeshRebuild = time;
@@ -1324,8 +1356,10 @@ export default function MinecraftView({
       if (!currentIds.has(id)) {
         const pos = terminalPositionsRef.current.get(id);
         if (pos) {
+          const key = posKey(pos.x, pos.y, pos.z);
           world.userDelete(pos.x, pos.y, pos.z);
-          posToTerminalRef.current.delete(posKey(pos.x, pos.y, pos.z));
+          posToTerminalRef.current.delete(key);
+          terminalRotationsRef.current.delete(key);
           meshDirtyRef.current = true;
         }
         terminalPositionsRef.current.delete(id);
@@ -1434,8 +1468,8 @@ export default function MinecraftView({
             <div style={styles.instructionsKeys}>
               <span><b>WASD</b> move &nbsp; <b>Space</b> jump &nbsp; <b>Mouse</b> look</span>
               <span><b>Ctrl</b> sprint &nbsp; <b>Shift</b> sneak (edge-safe)</span>
-              <span><b>Left click</b> break &nbsp; <b>Right click</b> place &nbsp; <b>Right click terminal</b> open</span>
-              <span><b>1-9</b> / <b>scroll</b> select block &nbsp; <b>ESC</b> release cursor</span>
+              <span><b>Left click</b> break &nbsp; <b>Right click</b> place &nbsp; <b>Middle click</b> pick block</span>
+              <span><b>E</b> / <b>Right click</b> open terminal &nbsp; <b>1-9</b> / <b>scroll</b> select block &nbsp; <b>ESC</b> release cursor</span>
             </div>
           </div>
         </div>

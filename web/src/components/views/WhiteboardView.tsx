@@ -79,6 +79,7 @@ export default function WhiteboardView({
   const nodeCountRef = useRef(0);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const [addBtnHovered, setAddBtnHovered] = useState(false);
+  const [layoutBtnHovered, setLayoutBtnHovered] = useState(false);
 
   // Assign layouts to new terminals
   useEffect(() => {
@@ -112,6 +113,44 @@ export default function WhiteboardView({
     });
   }, [terminals]);
 
+  // Auto-layout: arrange terminals in a grid
+  const autoLayout = useCallback(() => {
+    if (terminals.length === 0) return;
+    const cols = Math.ceil(Math.sqrt(terminals.length));
+    const gap = 40;
+    setNodeLayouts((prev) => {
+      const next = new Map(prev);
+      terminals.forEach((term, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const existing = next.get(term.id);
+        const w = existing?.width ?? DEFAULT_NODE_WIDTH;
+        const h = existing?.height ?? DEFAULT_NODE_HEIGHT;
+        next.set(term.id, {
+          x: col * (DEFAULT_NODE_WIDTH + gap),
+          y: row * (DEFAULT_NODE_HEIGHT + gap),
+          width: w,
+          height: h,
+        });
+      });
+      return next;
+    });
+    // Center the view on the grid
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const cols2 = Math.ceil(Math.sqrt(terminals.length));
+      const rows = Math.ceil(terminals.length / cols2);
+      const gridW = cols2 * (DEFAULT_NODE_WIDTH + gap) - gap;
+      const gridH = rows * (DEFAULT_NODE_HEIGHT + gap) - gap;
+      const fitZoom = Math.min(1, rect.width / (gridW + 80), rect.height / (gridH + 80));
+      setPan({
+        x: (rect.width - gridW * fitZoom) / 2,
+        y: (rect.height - gridH * fitZoom) / 2,
+      });
+      setZoom(fitZoom);
+    }
+  }, [terminals, setNodeLayouts, setPan, setZoom]);
+
   // Focus on active node with F key
   const focusActiveNode = useCallback(() => {
     if (!activeTerminalId || !containerRef.current) return;
@@ -142,6 +181,10 @@ export default function WhiteboardView({
         e.preventDefault();
         focusActiveNode();
       }
+      if (e.code === 'KeyL' && (e.metaKey || e.ctrlKey) && e.shiftKey && !e.repeat) {
+        e.preventDefault();
+        autoLayout();
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
@@ -154,7 +197,7 @@ export default function WhiteboardView({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [focusActiveNode]);
+  }, [focusActiveNode, autoLayout]);
 
   // Global mouse move/up for dragging, resizing, panning
   useEffect(() => {
@@ -434,22 +477,44 @@ export default function WhiteboardView({
         })}
       </div>
 
-      {/* Floating add button */}
-      <button
-        onClick={() => createTerminal(80, 24)}
-        onMouseEnter={() => setAddBtnHovered(true)}
-        onMouseLeave={() => setAddBtnHovered(false)}
-        style={{
-          ...canvasStyles.addButton,
-          background: addBtnHovered ? '#00d4aa' : '#1c2128',
-          color: addBtnHovered ? '#0d1117' : '#00d4aa',
-          borderColor: addBtnHovered ? '#00d4aa' : '#30363d',
-          transform: addBtnHovered ? 'scale(1.05)' : 'scale(1)',
-        }}
-        title="New terminal"
-      >
-        +
-      </button>
+      {/* Floating toolbar */}
+      <div style={canvasStyles.toolbar}>
+        <button
+          onClick={autoLayout}
+          onMouseEnter={() => setLayoutBtnHovered(true)}
+          onMouseLeave={() => setLayoutBtnHovered(false)}
+          style={{
+            ...canvasStyles.toolbarButton,
+            background: layoutBtnHovered ? '#00d4aa' : '#1c2128',
+            color: layoutBtnHovered ? '#0d1117' : '#00d4aa',
+            borderColor: layoutBtnHovered ? '#00d4aa' : '#30363d',
+            transform: layoutBtnHovered ? 'scale(1.05)' : 'scale(1)',
+          }}
+          title="Auto layout (\u2318\u21E7L)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <rect x="1" y="1" width="5.5" height="5.5" rx="1" />
+            <rect x="9.5" y="1" width="5.5" height="5.5" rx="1" />
+            <rect x="1" y="9.5" width="5.5" height="5.5" rx="1" />
+            <rect x="9.5" y="9.5" width="5.5" height="5.5" rx="1" />
+          </svg>
+        </button>
+        <button
+          onClick={() => createTerminal(80, 24)}
+          onMouseEnter={() => setAddBtnHovered(true)}
+          onMouseLeave={() => setAddBtnHovered(false)}
+          style={{
+            ...canvasStyles.toolbarButton,
+            background: addBtnHovered ? '#00d4aa' : '#1c2128',
+            color: addBtnHovered ? '#0d1117' : '#00d4aa',
+            borderColor: addBtnHovered ? '#00d4aa' : '#30363d',
+            transform: addBtnHovered ? 'scale(1.05)' : 'scale(1)',
+          }}
+          title="New terminal"
+        >
+          +
+        </button>
+      </div>
 
       {/* Zoom indicator */}
       <div style={canvasStyles.zoomIndicator}>
@@ -535,10 +600,15 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     opacity: 0.6,
     borderRadius: 3,
   },
-  addButton: {
+  toolbar: {
     position: 'absolute',
     top: 16,
     right: 16,
+    display: 'flex',
+    gap: 8,
+    zIndex: 10,
+  },
+  toolbarButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -549,7 +619,6 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
     transition: 'all 0.15s ease',
     boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
     lineHeight: 1,

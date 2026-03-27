@@ -297,6 +297,7 @@ export default function Page() {
             <NavLink href="#how-it-works">How it works</NavLink>
             <NavLink href="#build">Build</NavLink>
             <NavLink href="#protocol">Protocol</NavLink>
+            <NavLink href="/docs">Docs</NavLink>
             <a
               href="https://github.com/vochsel/walkie-talkie"
               target="_blank"
