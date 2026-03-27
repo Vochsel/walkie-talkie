@@ -374,6 +374,18 @@ export default function Page() {
           <p style={{ fontSize: 13, color: TEXT_MUTED, marginTop: 16 }}>
             No install. No config. No signup.
           </p>
+
+          <div style={{ marginTop: 56, borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              style={{ display: 'block', width: '100%', height: 'auto' }}
+            >
+              <source src="/walkie-talkie-demo.mp4" type="video/mp4" />
+            </video>
+          </div>
         </div>
       </section>
 
