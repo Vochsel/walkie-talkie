@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -12,6 +12,7 @@ interface TerminalPopupProps {
   onResize: (cols: number, rows: number) => void;
   registerOutput: (handler: (data: string) => void) => () => void;
   onClose: () => void;
+  onRename?: (name: string) => void;
   title?: string;
   style?: React.CSSProperties;
 }
@@ -23,12 +24,15 @@ export default function TerminalPopup({
   onResize,
   registerOutput,
   onClose,
+  onRename,
   title,
   style,
 }: TerminalPopupProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -123,7 +127,38 @@ export default function TerminalPopup({
     >
       <div style={popupStyles.window} onClick={(e) => e.stopPropagation()}>
         <div style={popupStyles.titlebar}>
-          <span style={popupStyles.title}>{title || `Terminal`}</span>
+          {editing ? (
+            <input
+              style={popupStyles.titleInput}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => {
+                const trimmed = editValue.trim();
+                if (trimmed && onRename) onRename(trimmed);
+                setEditing(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const trimmed = editValue.trim();
+                  if (trimmed && onRename) onRename(trimmed);
+                  setEditing(false);
+                }
+                if (e.key === 'Escape') setEditing(false);
+              }}
+              autoFocus
+            />
+          ) : (
+            <span
+              style={popupStyles.title}
+              onDoubleClick={() => {
+                if (!onRename) return;
+                setEditValue(title || 'Terminal');
+                setEditing(true);
+              }}
+            >
+              {title || `Terminal`}
+            </span>
+          )}
           <button style={popupStyles.closeBtn} onClick={onClose}>
             &times;
           </button>
@@ -170,6 +205,19 @@ const popupStyles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: '#e6edf3',
     fontFamily: "'SF Mono', monospace",
+    cursor: 'default',
+  },
+  titleInput: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#e6edf3',
+    fontFamily: "'SF Mono', monospace",
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 3,
+    padding: '2px 6px',
+    outline: 'none',
+    width: 200,
   },
   closeBtn: {
     background: 'none',

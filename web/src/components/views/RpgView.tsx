@@ -117,7 +117,7 @@ interface Station { tileX: number; tileY: number; }
 // ── Component ───────────────────────────────────────────────────────
 export default function RpgView({
   terminals, activeTerminalId, setActiveTerminalId,
-  sendInput, resizeTerminal, killTerminal, createTerminal, registerOutputHandler,
+  sendInput, resizeTerminal, killTerminal, renameTerminal, createTerminal, registerOutputHandler,
 }: ViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -621,6 +621,7 @@ export default function RpgView({
           onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
           registerOutput={(handler) => registerOutputHandler(t.id, handler)}
           onClose={() => setOpenTerminalId(null)}
+          onRename={(name) => renameTerminal(t.id, name)}
           title={t.name || `Station [${t.id.slice(0, 8)}]`}
         />
       ))}
