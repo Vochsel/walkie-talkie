@@ -1,6 +1,7 @@
 import { createServer, generateQR } from './server';
 import { DEFAULT_PORT } from '@walkie-talkie/shared';
 import { createConnection } from 'net';
+import { networkInterfaces } from 'os';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -75,6 +76,18 @@ function demoUrl(serverUrl: string, token: string): string {
   return `${DEMO_HOST}?server=${encodeURIComponent(serverUrl)}&token=${encodeURIComponent(token)}`;
 }
 
+function getLocalIp(): string {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]!) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
 function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const conn = createConnection({ port }, () => {
@@ -120,12 +133,15 @@ async function main() {
   await server.start();
 
   const token = server.generateToken();
+  const lanIp = getLocalIp();
   const localUrl = `http://localhost:${port}`;
-  const openUrl = demoUrl(localUrl, token.value);
+  const networkUrl = `http://${lanIp}:${port}`;
+  const openUrl = demoUrl(networkUrl, token.value);
 
   console.log(`  ${GREEN}${BOLD}Server running${RESET}`);
-  console.log(`  ${DIM}Local:${RESET} ${WHITE}${localUrl}${RESET}`);
-  console.log(`  ${DIM}Token:${RESET} ${CYAN}${BOLD}${token.value}${RESET}`);
+  console.log(`  ${DIM}Local:${RESET}   ${WHITE}${localUrl}${RESET}`);
+  console.log(`  ${DIM}Network:${RESET} ${WHITE}${networkUrl}${RESET}`);
+  console.log(`  ${DIM}Token:${RESET}   ${CYAN}${BOLD}${token.value}${RESET}`);
   console.log('');
 
   // QR code points to demo site
@@ -152,7 +168,7 @@ async function main() {
   // Generate new token on SIGUSR1
   process.on('SIGUSR1', () => {
     const t = server.generateToken();
-    const url = demoUrl(localUrl, t.value);
+    const url = demoUrl(networkUrl, t.value);
     console.log(`  ${GREEN}New token:${RESET} ${CYAN}${BOLD}${t.value}${RESET}`);
     console.log(`  ${CYAN}${UNDERLINE}${url}${RESET}`);
   });

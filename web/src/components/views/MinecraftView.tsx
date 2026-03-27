@@ -14,16 +14,19 @@ type BlockType =
   | 'tnt' | 'obsidian' | 'mossy_cobblestone' | 'bedrock'
   | 'coal_ore' | 'iron_ore' | 'gold_ore' | 'diamond_ore' | 'redstone_ore'
   | 'iron_block' | 'gold_block' | 'diamond_block'
-  | 'terminal';
+  | 'door' | 'torch' | 'wood_stairs' | 'cobblestone_stairs' | 'glass_pane' | 'terminal';
 
-const HOTBAR_BLOCKS: BlockType[] = [
-  // Row 1: terrain & building
-  'grass', 'dirt', 'stone', 'cobblestone', 'planks', 'wood', 'bricks', 'sand', 'glass', 'gravel', 'leaves', 'sponge', 'bookshelf',
-  // Row 2: special & underground
-  'tnt', 'obsidian', 'mossy_cobblestone', 'bedrock', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'redstone_ore', 'iron_block', 'gold_block', 'diamond_block', 'terminal',
+const ALL_BLOCKS: BlockType[] = [
+  'grass', 'dirt', 'stone', 'cobblestone', 'planks', 'wood', 'bricks', 'sand', 'glass', 'glass_pane',
+  'gravel', 'leaves', 'sponge', 'bookshelf', 'door', 'torch', 'wood_stairs', 'cobblestone_stairs',
+  'tnt', 'obsidian', 'mossy_cobblestone', 'bedrock', 'coal_ore', 'iron_ore', 'gold_ore',
+  'diamond_ore', 'redstone_ore', 'iron_block', 'gold_block', 'diamond_block', 'terminal',
 ];
 
-const HOTBAR_ROW_SIZE = 13;
+const HOTBAR_SIZE = 9;
+const DEFAULT_HOTBAR: BlockType[] = [
+  'grass', 'dirt', 'stone', 'cobblestone', 'planks', 'wood_stairs', 'door', 'torch', 'glass_pane',
+];
 
 const BLOCK_LABELS: Record<BlockType, string> = {
   grass: 'Grass', dirt: 'Dirt', stone: 'Stone', cobblestone: 'Cobble', planks: 'Planks',
@@ -31,7 +34,9 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   leaves: 'Leaves', sponge: 'Sponge', bookshelf: 'Books', tnt: 'TNT', obsidian: 'Obsidian',
   mossy_cobblestone: 'Mossy', bedrock: 'Bedrock', coal_ore: 'Coal', iron_ore: 'Iron Ore',
   gold_ore: 'Gold Ore', diamond_ore: 'Diamond', redstone_ore: 'Redstone',
-  iron_block: 'Iron', gold_block: 'Gold', diamond_block: 'Diamond B.', terminal: 'Terminal',
+  iron_block: 'Iron', gold_block: 'Gold', diamond_block: 'Diamond B.',
+  door: 'Door', torch: 'Torch', wood_stairs: 'Wood Stairs', cobblestone_stairs: 'Stone Stairs',
+  glass_pane: 'Glass Pane', terminal: 'Terminal',
 };
 
 const BLOCK_PREVIEW: Record<BlockType, string> = {
@@ -41,7 +46,9 @@ const BLOCK_PREVIEW: Record<BlockType, string> = {
   bookshelf: '#6b4226', tnt: '#cc3333', obsidian: '#1a0a2e', mossy_cobblestone: '#5a7a5a',
   bedrock: '#3a3a3a', coal_ore: '#444444', iron_ore: '#998877', gold_ore: '#aa8833',
   diamond_ore: '#55bbcc', redstone_ore: '#aa3333', iron_block: '#c8c8c8',
-  gold_block: '#ddaa22', diamond_block: '#55ddcc', terminal: '#00d4aa',
+  gold_block: '#ddaa22', diamond_block: '#55ddcc',
+  door: '#8b6b4a', torch: '#ffaa00', wood_stairs: '#b89b60', cobblestone_stairs: '#7a7a7a',
+  glass_pane: '#aaddff', terminal: '#00d4aa',
 };
 
 // ── Texture atlas mapping ───────────────────────────────────────────
@@ -79,6 +86,11 @@ const BLOCK_FACES: Record<BlockType, FaceMap> = {
   iron_block:         allFaces([6,1]),
   gold_block:         allFaces([7,1]),
   diamond_block:      allFaces([8,1]),
+  door:               allFaces([4,0]),
+  torch:              allFaces([0,5]),
+  wood_stairs:        allFaces([4,0]),   // planks texture
+  cobblestone_stairs: allFaces([0,1]),   // cobblestone texture
+  glass_pane:         allFaces([1,3]),   // glass texture
   terminal:           allFaces([0,0]),
 };
 
@@ -159,8 +171,26 @@ function createBlockMaterial(
     const cap = new THREE.MeshLambertMaterial({ map: texture });
     return [side, side, cap, cap, side, side];
   }
+  if (blockType === 'door') {
+    return new THREE.MeshLambertMaterial({ map: texture, color: 0x9b7b5a });
+  }
+  if (blockType === 'torch') {
+    return new THREE.MeshLambertMaterial({
+      color: 0x8b6b4a, emissive: 0xffaa00, emissiveIntensity: 0.3,
+    });
+  }
+  if (blockType === 'glass_pane') {
+    return new THREE.MeshLambertMaterial({
+      map: texture, transparent: true, alphaTest: 0.01, opacity: 0.8, side: THREE.DoubleSide,
+    });
+  }
+  if (blockType === 'wood_stairs' || blockType === 'cobblestone_stairs') {
+    return new THREE.MeshLambertMaterial({ map: texture });
+  }
   return new THREE.MeshLambertMaterial({ map: texture });
 }
+
+const DAY_CYCLE_LENGTH = 1200; // 20 minutes in seconds (same as Minecraft)
 
 const WORLD_SIZE = 32;
 const UNDERGROUND_DEPTH = -16; // bedrock level
@@ -261,7 +291,7 @@ class VoxelWorld {
   isSolid(x: number, y: number, z: number): boolean {
     const b = this.blocks.get(posKey(x, y, z));
     if (!b) return false;
-    if (b === 'glass') return false; // glass is non-solid
+    if (b === 'glass' || b === 'torch') return false;
     return true;
   }
 
@@ -503,7 +533,7 @@ function generateWorld(): VoxelWorld {
 // ── Create all materials for all block types ────────────────────────
 function createAllMaterials(texture: THREE.Texture): Map<BlockType, THREE.Material | THREE.Material[]> {
   const mats = new Map<BlockType, THREE.Material | THREE.Material[]>();
-  for (const type of HOTBAR_BLOCKS) {
+  for (const type of ALL_BLOCKS) {
     mats.set(type, createBlockMaterial(texture, type));
   }
   return mats;
@@ -512,7 +542,7 @@ function createAllMaterials(texture: THREE.Texture): Map<BlockType, THREE.Materi
 // ── Geometry cache per block type ───────────────────────────────────
 function createAllGeometries(): Map<BlockType, THREE.BoxGeometry> {
   const geos = new Map<BlockType, THREE.BoxGeometry>();
-  for (const type of HOTBAR_BLOCKS) {
+  for (const type of ALL_BLOCKS) {
     geos.set(type, createBlockGeometry(BLOCK_FACES[type]));
   }
   return geos;
@@ -580,18 +610,217 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   return group;
 }
 
+// ── Door model ──────────────────────────────────────────────────────
+function createDoorModel(position: THREE.Vector3, isOpen: boolean, yaw: number): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.userData.blockType = 'door';
+  group.rotation.y = yaw;
+
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x8b6b4a });
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
+
+  // Door frame (always visible)
+  const frameTop = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.2), frameMat);
+  frameTop.position.set(0, 0.45, 0);
+  frameTop.castShadow = true;
+  group.add(frameTop);
+
+  const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.2), frameMat);
+  frameL.position.set(-0.45, 0, 0);
+  frameL.castShadow = true;
+  group.add(frameL);
+
+  const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.2), frameMat);
+  frameR.position.set(0.45, 0, 0);
+  frameR.castShadow = true;
+  group.add(frameR);
+
+  // Door panel
+  const panelGeo = new THREE.BoxGeometry(0.8, 0.9, 0.12);
+  const panel = new THREE.Mesh(panelGeo, doorMat);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+
+  if (isOpen) {
+    // Swing open 90° around left edge
+    panel.position.set(-0.05, 0, 0.34);
+    panel.rotation.y = -Math.PI / 2;
+  } else {
+    panel.position.set(0, 0, 0);
+  }
+
+  group.add(panel);
+  return group;
+}
+
+// ── Torch model ─────────────────────────────────────────────────────
+function createTorchModel(position: THREE.Vector3): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.userData.blockType = 'torch';
+
+  // Stick
+  const stickMat = new THREE.MeshLambertMaterial({ color: 0x8b6b4a });
+  const stick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), stickMat);
+  stick.position.y = -0.18;
+  stick.castShadow = true;
+  group.add(stick);
+
+  // Flame tip
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), flameMat);
+  flame.position.y = 0.15;
+  group.add(flame);
+
+  // Warm glow around flame
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.3 });
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), glowMat);
+  glow.position.y = 0.15;
+  group.add(glow);
+
+  // Point light for illumination
+  const light = new THREE.PointLight(0xffaa44, 1.2, 14);
+  light.position.y = 0.25;
+  light.castShadow = false;
+  group.add(light);
+
+  return group;
+}
+
+// ── Stair model ─────────────────────────────────────────────────────
+function createStairModel(
+  position: THREE.Vector3,
+  material: THREE.Material | THREE.Material[],
+  texture: THREE.Texture,
+  faces: FaceMap,
+  yaw: number,
+): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.userData.blockType = 'wood_stairs'; // generic marker
+  group.rotation.y = yaw;
+
+  // Bottom slab (full width, half height)
+  const bottomGeo = createBlockGeometry(faces);
+  bottomGeo.scale(1, 0.5, 1);
+  const mat = Array.isArray(material) ? material : material;
+  const bottom = new THREE.Mesh(bottomGeo, mat);
+  bottom.position.y = -0.25;
+  bottom.castShadow = true;
+  bottom.receiveShadow = true;
+  group.add(bottom);
+
+  // Top back slab (full width, half height, half depth)
+  const topGeo = createBlockGeometry(faces);
+  topGeo.scale(1, 0.5, 0.5);
+  const top = new THREE.Mesh(topGeo, mat);
+  top.position.set(0, 0.25, -0.25);
+  top.castShadow = true;
+  top.receiveShadow = true;
+  group.add(top);
+
+  return group;
+}
+
+// ── Glass pane model ────────────────────────────────────────────────
+function createGlassPaneModel(position: THREE.Vector3, texture: THREE.Texture, yaw: number): THREE.Group {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.userData.blockType = 'glass_pane';
+  group.rotation.y = yaw;
+
+  // Thin vertical panel
+  const paneGeo = new THREE.BoxGeometry(1, 1, 0.1);
+  // Map glass texture UVs
+  const uv = paneGeo.getAttribute('uv') as THREE.BufferAttribute;
+  const [col, row] = [1, 3]; // glass tile
+  const u0 = col / ATLAS_TILES, u1 = (col + 1) / ATLAS_TILES;
+  const v0 = 1 - (row + 1) / ATLAS_TILES, v1 = 1 - row / ATLAS_TILES;
+  for (let face = 0; face < 6; face++) {
+    const i = face * 4;
+    uv.setXY(i + 0, u0, v1);
+    uv.setXY(i + 1, u1, v1);
+    uv.setXY(i + 2, u0, v0);
+    uv.setXY(i + 3, u1, v0);
+  }
+  uv.needsUpdate = true;
+
+  const paneMat = new THREE.MeshLambertMaterial({
+    map: texture, transparent: true, opacity: 0.75,
+    alphaTest: 0.01, side: THREE.DoubleSide,
+  });
+  const pane = new THREE.Mesh(paneGeo, paneMat);
+  pane.castShadow = false;
+  pane.receiveShadow = true;
+  group.add(pane);
+
+  // Thin frame edges
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+  const frameT = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 0.12), frameMat);
+  frameT.position.y = 0.47;
+  group.add(frameT);
+  const frameB = new THREE.Mesh(new THREE.BoxGeometry(1, 0.06, 0.12), frameMat);
+  frameB.position.y = -0.47;
+  group.add(frameB);
+
+  return group;
+}
+
 // ── Build meshes from world ─────────────────────────────────────────
 function buildWorldMeshes(
   world: VoxelWorld,
   materials: Map<BlockType, THREE.Material | THREE.Material[]>,
   geometries: Map<BlockType, THREE.BoxGeometry>,
   terminalRotations?: Map<string, number>,
+  doorStates?: Map<string, boolean>,
+  atlasTexture?: THREE.Texture,
 ): THREE.Object3D[] {
   const groups = world.grouped();
   const meshes: THREE.Object3D[] = [];
 
   for (const [type, positions] of groups) {
     if (positions.length === 0) continue;
+
+    // Door blocks use custom model
+    if (type === 'door') {
+      for (const pos of positions) {
+        const key = posKey(pos.x, pos.y, pos.z);
+        const isOpen = doorStates?.get(key) ?? false;
+        const yaw = terminalRotations?.get(key) ?? 0;
+        meshes.push(createDoorModel(pos, isOpen, yaw));
+      }
+      continue;
+    }
+
+    // Torch blocks use custom model
+    if (type === 'torch') {
+      for (const pos of positions) {
+        meshes.push(createTorchModel(pos));
+      }
+      continue;
+    }
+
+    // Stair blocks use custom model
+    if (type === 'wood_stairs' || type === 'cobblestone_stairs') {
+      for (const pos of positions) {
+        const key = posKey(pos.x, pos.y, pos.z);
+        const yaw = terminalRotations?.get(key) ?? 0;
+        const mat = materials.get(type)!;
+        meshes.push(createStairModel(pos, mat, atlasTexture!, BLOCK_FACES[type], yaw));
+      }
+      continue;
+    }
+
+    // Glass pane blocks use custom thin model
+    if (type === 'glass_pane') {
+      for (const pos of positions) {
+        const key = posKey(pos.x, pos.y, pos.z);
+        const yaw = terminalRotations?.get(key) ?? 0;
+        meshes.push(createGlassPaneModel(pos, atlasTexture!, yaw));
+      }
+      continue;
+    }
 
     // Terminal blocks use a custom CRT model instead of instanced cubes
     if (type === 'terminal') {
@@ -787,6 +1016,10 @@ export default function MinecraftView({
   const [isLocked, setIsLocked] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
+  const [hotbarItems, setHotbarItems] = usePersistedState<BlockType[]>('mc:hotbarItems', DEFAULT_HOTBAR);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const inventoryOpenRef = useRef(false);
+  const hotbarItemsRef = useRef<BlockType[]>(DEFAULT_HOTBAR);
 
   // Refs for game state (avoid re-renders)
   const worldRef = useRef<VoxelWorld | null>(null);
@@ -800,6 +1033,7 @@ export default function MinecraftView({
     geometries: Map<BlockType, THREE.BoxGeometry>;
     raycaster: THREE.Raycaster;
     highlightMesh: THREE.Mesh;
+    atlasTexture: THREE.Texture;
   } | null>(null);
 
   const keysRef = useRef<Set<string>>(new Set());
@@ -817,6 +1051,7 @@ export default function MinecraftView({
   const crouchCameraOffsetRef = useRef(0);
   const selectedSlotRef = useRef(0);
   const meshDirtyRef = useRef(false);
+  const doorStatesRef = useRef<Map<string, boolean>>(new Map());
 
   // Terminal block tracking — persisted as plain objects
   const { ref: termPosObjRef, save: saveTermPositions } = usePersistedRef<Record<string, [number, number, number]>>('mc:termPositions', {});
@@ -840,8 +1075,10 @@ export default function MinecraftView({
     saveTermRots();
   }, [termPosObjRef, saveTermPositions, posToTermObjRef, savePosToTerm, termRotObjRef, saveTermRots]);
 
-  // Keep selectedSlotRef in sync
+  // Keep refs in sync with state
   useEffect(() => { selectedSlotRef.current = selectedSlot; }, [selectedSlot]);
+  useEffect(() => { hotbarItemsRef.current = hotbarItems; }, [hotbarItems]);
+  useEffect(() => { inventoryOpenRef.current = inventoryOpen; }, [inventoryOpen]);
 
   const rebuildMeshes = useCallback(() => {
     const s = sceneObjsRef.current;
@@ -853,7 +1090,7 @@ export default function MinecraftView({
       if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
     }
 
-    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries, terminalRotationsRef.current);
+    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries, terminalRotationsRef.current, doorStatesRef.current, s.atlasTexture);
     for (const m of s.worldMeshes) s.scene.add(m);
   }, []);
 
@@ -876,8 +1113,9 @@ export default function MinecraftView({
     const camera = new THREE.PerspectiveCamera(BASE_FOV, container.clientWidth / container.clientHeight, 0.1, 120);
     camera.position.copy(playerPosRef.current);
 
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    // Lights (named refs for day/night cycle)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
     dirLight.position.set(24, 50, 24);
     dirLight.castShadow = true;
@@ -885,8 +1123,79 @@ export default function MinecraftView({
     dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
     dirLight.shadow.camera.top = 50; dirLight.shadow.camera.bottom = -50;
     dirLight.shadow.camera.far = 120;
+    dirLight.target.position.set(WORLD_SIZE / 2, 0, WORLD_SIZE / 2);
     scene.add(dirLight);
-    scene.add(new THREE.HemisphereLight(0x87ceeb, 0x4a8c3f, 0.3));
+    scene.add(dirLight.target);
+    const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x4a8c3f, 0.3);
+    scene.add(hemiLight);
+
+    // ── Sun & Moon ────────────────────────────────────────────────────
+    const sunMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(5, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffee88, fog: false }),
+    );
+    scene.add(sunMesh);
+
+    const moonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(3.5, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0xddddff, fog: false }),
+    );
+    scene.add(moonMesh);
+
+    // ── Stars ─────────────────────────────────────────────────────────
+    const starsGeo = new THREE.BufferGeometry();
+    const starVerts: number[] = [];
+    const starRng = mulberry32(777);
+    for (let i = 0; i < 400; i++) {
+      const theta = starRng() * Math.PI * 2;
+      const phi = Math.acos(2 * starRng() - 1);
+      const r = 95;
+      starVerts.push(
+        WORLD_SIZE / 2 + r * Math.sin(phi) * Math.cos(theta),
+        Math.abs(r * Math.sin(phi) * Math.sin(theta)) + 5,
+        WORLD_SIZE / 2 + r * Math.cos(phi),
+      );
+    }
+    starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+    const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, fog: false, transparent: true, opacity: 0 });
+    const starsMesh = new THREE.Points(starsGeo, starsMat);
+    scene.add(starsMesh);
+
+    // ── Clouds ────────────────────────────────────────────────────────
+    const cloudCanvas = document.createElement('canvas');
+    cloudCanvas.width = 128;
+    cloudCanvas.height = 128;
+    const cctx = cloudCanvas.getContext('2d')!;
+    cctx.clearRect(0, 0, 128, 128);
+    const cloudRng = mulberry32(123);
+    // Blocky MC-style clouds
+    for (let i = 0; i < 18; i++) {
+      const cx = Math.floor(cloudRng() * 128);
+      const cy = Math.floor(cloudRng() * 128);
+      const w = 8 + Math.floor(cloudRng() * 28);
+      const h = 6 + Math.floor(cloudRng() * 14);
+      for (let bx = 0; bx < w; bx += 4) {
+        for (let by = 0; by < h; by += 4) {
+          if (cloudRng() > 0.25) {
+            cctx.fillStyle = 'rgba(255,255,255,0.85)';
+            cctx.fillRect((cx + bx) % 128, (cy + by) % 128, 4, 4);
+          }
+        }
+      }
+    }
+    const cloudTex = new THREE.CanvasTexture(cloudCanvas);
+    cloudTex.wrapS = THREE.RepeatWrapping;
+    cloudTex.wrapT = THREE.RepeatWrapping;
+    cloudTex.repeat.set(3, 3);
+    cloudTex.magFilter = THREE.NearestFilter;
+    const cloudMat = new THREE.MeshBasicMaterial({
+      map: cloudTex, transparent: true, opacity: 0.7,
+      depthWrite: false, side: THREE.DoubleSide, fog: false,
+    });
+    const cloudMesh = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), cloudMat);
+    cloudMesh.position.set(WORLD_SIZE / 2, 30, WORLD_SIZE / 2);
+    cloudMesh.rotation.x = -Math.PI / 2;
+    scene.add(cloudMesh);
 
     // Generate world
     const world = generateWorld();
@@ -933,7 +1242,7 @@ export default function MinecraftView({
 
     const geometries = createAllGeometries();
     const materials = createAllMaterials(texture);
-    const worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current);
+    const worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture);
     for (const m of worldMeshes) scene.add(m);
 
     // Block highlight wireframe
@@ -946,7 +1255,7 @@ export default function MinecraftView({
     const raycaster = new THREE.Raycaster();
     raycaster.far = 8;
 
-    const state = { renderer, scene, camera, animId: 0, worldMeshes, materials, geometries, raycaster, highlightMesh };
+    const state = { renderer, scene, camera, animId: 0, worldMeshes, materials, geometries, raycaster, highlightMesh, atlasTexture: texture };
     sceneObjsRef.current = state;
 
     // ── Pointer lock ────────────────────────────────────────────────
@@ -984,14 +1293,19 @@ export default function MinecraftView({
       if (num >= 1 && num <= 9) {
         setSelectedSlot(num - 1);
       }
-      // E to interact with terminal
-      if (k === 'e' && document.pointerLockElement === canvas) {
-        const hit = raycastBlock();
-        if (hit && hit.blockType === 'terminal' && hit.terminalId) {
+      // E to toggle inventory
+      if (k === 'e') {
+        if (inventoryOpenRef.current) {
+          setInventoryOpen(false);
+          canvas.requestPointerLock();
+        } else if (document.pointerLockElement === canvas) {
           document.exitPointerLock();
-          setPopupTerminalId(hit.terminalId);
-          setActiveTerminalId(hit.terminalId);
+          setInventoryOpen(true);
         }
+      }
+      // Escape also closes inventory
+      if (k === 'escape' && inventoryOpenRef.current) {
+        setInventoryOpen(false);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
@@ -1004,7 +1318,7 @@ export default function MinecraftView({
       e.preventDefault();
       setSelectedSlot(prev => {
         const dir = e.deltaY > 0 ? 1 : -1;
-        return ((prev + dir) % HOTBAR_BLOCKS.length + HOTBAR_BLOCKS.length) % HOTBAR_BLOCKS.length;
+        return ((prev + dir) % HOTBAR_SIZE + HOTBAR_SIZE) % HOTBAR_SIZE;
       });
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -1049,10 +1363,11 @@ export default function MinecraftView({
       if (!hit) return;
 
       if (e.button === 1) {
-        // Middle click: PICK block type
+        // Middle click: PICK block type → set current hotbar slot to this block
         e.preventDefault();
-        const idx = HOTBAR_BLOCKS.indexOf(hit.blockType);
-        if (idx !== -1) setSelectedSlot(idx);
+        const newItems = [...hotbarItemsRef.current];
+        newItems[selectedSlotRef.current] = hit.blockType;
+        setHotbarItems(newItems);
         return;
       }
 
@@ -1077,8 +1392,17 @@ export default function MinecraftView({
         saveState('mc:worldDiff', world.exportDiff());
 
       } else if (e.button === 2) {
-        // Right click: PLACE block or open terminal
+        // Right click: PLACE block, open terminal, or toggle door
         const { blockPos, placePos, blockType, terminalId } = hit;
+
+        // If clicking a door, toggle open/close
+        if (blockType === 'door') {
+          const key = posKey(blockPos.x, blockPos.y, blockPos.z);
+          const isOpen = doorStatesRef.current.get(key) ?? false;
+          doorStatesRef.current.set(key, !isOpen);
+          meshDirtyRef.current = true;
+          return;
+        }
 
         // If clicking a terminal block, open it
         if (blockType === 'terminal' && terminalId) {
@@ -1102,10 +1426,16 @@ export default function MinecraftView({
           return; // would be inside player
         }
 
-        const selectedBlock = HOTBAR_BLOCKS[selectedSlotRef.current];
+        const selectedBlock = hotbarItemsRef.current[selectedSlotRef.current];
         world.userSet(placePos.x, placePos.y, placePos.z, selectedBlock);
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
+
+        // Store rotation for blocks that need it (door, stairs, glass pane)
+        if (selectedBlock === 'door' || selectedBlock === 'wood_stairs' || selectedBlock === 'cobblestone_stairs' || selectedBlock === 'glass_pane') {
+          const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
+          terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
+        }
 
         // If placing a terminal block, create a terminal facing the player
         if (selectedBlock === 'terminal') {
@@ -1308,11 +1638,65 @@ export default function MinecraftView({
             });
           }
         }
-        state.worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current);
+        state.worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture);
         for (const m of state.worldMeshes) scene.add(m);
         meshDirtyRef.current = false;
         lastMeshRebuild = time;
       }
+
+      // ── Day/night cycle ──────────────────────────────────────────────
+      const dayTime = (time % DAY_CYCLE_LENGTH) / DAY_CYCLE_LENGTH; // 0→1
+      const sunAngle = dayTime * Math.PI * 2 - Math.PI / 2;
+      const sunY = Math.sin(sunAngle);
+      const sunX = Math.cos(sunAngle);
+      const wc = WORLD_SIZE / 2;
+      const orbitR = 85;
+
+      sunMesh.position.set(wc, sunY * orbitR + 15, wc + sunX * orbitR);
+      moonMesh.position.set(wc, -sunY * orbitR + 15, wc - sunX * orbitR);
+
+      // Sun visibility above horizon
+      const sunHeight = Math.max(0, Math.min(1, sunY * 2 + 0.5));
+
+      // Sky color interpolation
+      const daySky = new THREE.Color(0x87ceeb);
+      const nightSky = new THREE.Color(0x0a0a2e);
+      const sunsetSky = new THREE.Color(0xff7744);
+      let skyColor: THREE.Color;
+      if (sunHeight > 0.35) {
+        skyColor = daySky.clone();
+      } else if (sunHeight > 0.15) {
+        const t = (sunHeight - 0.15) / 0.2;
+        skyColor = sunsetSky.clone().lerp(daySky, t);
+      } else {
+        const t = sunHeight / 0.15;
+        skyColor = nightSky.clone().lerp(sunsetSky, t);
+      }
+      scene.background = skyColor;
+      (scene.fog as THREE.FogExp2).color.copy(skyColor);
+
+      // Lighting intensity follows sun
+      dirLight.intensity = 0.1 + 0.75 * sunHeight;
+      dirLight.position.copy(sunMesh.position).sub(new THREE.Vector3(wc, 0, wc)).normalize().multiplyScalar(50).add(new THREE.Vector3(wc, 0, wc));
+      if (sunHeight > 0.2) {
+        dirLight.color.setHex(0xffffff);
+      } else {
+        const t = Math.max(0, sunHeight / 0.2);
+        dirLight.color.set(new THREE.Color(0x334477).lerp(new THREE.Color(0xffffff), t));
+      }
+      ambientLight.intensity = 0.12 + 0.43 * sunHeight;
+      hemiLight.intensity = 0.08 + 0.22 * sunHeight;
+
+      // Stars visible at night
+      starsMat.opacity = Math.max(0, 1 - sunHeight * 5);
+      starsMesh.visible = starsMat.opacity > 0.01;
+
+      // Cloud opacity dims at night
+      cloudMat.opacity = 0.3 + 0.4 * sunHeight;
+
+      // Clouds drift
+      cloudTex.offset.x += dt * 0.004;
+      cloudTex.offset.x %= 1;
 
       renderer.render(scene, camera);
     };
@@ -1429,35 +1813,82 @@ export default function MinecraftView({
         </div>
       )}
 
-      {/* Hotbar */}
+      {/* Hotbar — MC-style 9 slots */}
       {isLocked && (
         <div style={styles.hotbar}>
-          {[0, 1].map((row) => (
-            <div key={row} style={styles.hotbarRow}>
-              {HOTBAR_BLOCKS.slice(row * HOTBAR_ROW_SIZE, (row + 1) * HOTBAR_ROW_SIZE).map((type, i) => {
-                const idx = row * HOTBAR_ROW_SIZE + i;
-                return (
-                  <div
-                    key={type}
-                    style={{
-                      ...styles.hotbarSlot,
-                      ...(idx === selectedSlot ? styles.hotbarSlotActive : {}),
-                    }}
-                    onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(idx); }}
-                  >
-                    <div style={{
-                      ...styles.hotbarBlock,
-                      background: BLOCK_PREVIEW[type],
-                      ...(type === 'glass' ? { opacity: 0.5 } : {}),
-                      ...(type === 'terminal' ? { boxShadow: '0 0 6px #00d4aa' } : {}),
-                    }} />
-                    <span style={styles.hotbarLabel}>{BLOCK_LABELS[type]}</span>
-                    {idx < 9 && <span style={styles.hotbarKey}>{idx + 1}</span>}
-                  </div>
-                );
-              })}
+          {hotbarItems.map((type, idx) => (
+            <div
+              key={idx}
+              style={{
+                ...styles.hotbarSlot,
+                ...(idx === selectedSlot ? styles.hotbarSlotActive : {}),
+              }}
+              onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(idx); }}
+            >
+              <div style={{
+                ...styles.hotbarBlock,
+                background: BLOCK_PREVIEW[type],
+                ...(type === 'glass' || type === 'glass_pane' ? { opacity: 0.5 } : {}),
+                ...(type === 'terminal' ? { boxShadow: '0 0 6px #00d4aa' } : {}),
+                ...(type === 'torch' ? { boxShadow: '0 0 6px #ffaa00' } : {}),
+              }} />
+              <span style={styles.hotbarKey}>{idx + 1}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Creative Inventory */}
+      {inventoryOpen && (
+        <div style={styles.inventoryOverlay} onClick={() => { setInventoryOpen(false); }}>
+          <div style={styles.inventoryPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.inventoryTitle}>Inventory</div>
+            <div style={styles.inventoryGrid}>
+              {ALL_BLOCKS.map((type) => (
+                <div
+                  key={type}
+                  style={{
+                    ...styles.inventorySlot,
+                    ...(hotbarItems[selectedSlot] === type ? styles.inventorySlotActive : {}),
+                  }}
+                  onClick={() => {
+                    const newItems = [...hotbarItems];
+                    newItems[selectedSlot] = type;
+                    setHotbarItems(newItems);
+                  }}
+                >
+                  <div style={{
+                    ...styles.inventoryBlock,
+                    background: BLOCK_PREVIEW[type],
+                    ...(type === 'glass' || type === 'glass_pane' ? { opacity: 0.5 } : {}),
+                    ...(type === 'terminal' ? { boxShadow: '0 0 4px #00d4aa' } : {}),
+                    ...(type === 'torch' ? { boxShadow: '0 0 4px #ffaa00' } : {}),
+                  }} />
+                  <span style={styles.inventoryLabel}>{BLOCK_LABELS[type]}</span>
+                </div>
+              ))}
+            </div>
+            <div style={styles.inventoryHotbar}>
+              <div style={styles.inventoryHotbarLabel}>Hotbar</div>
+              <div style={styles.inventoryHotbarRow}>
+                {hotbarItems.map((type, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      ...styles.inventoryHotbarSlot,
+                      ...(idx === selectedSlot ? styles.inventoryHotbarSlotActive : {}),
+                    }}
+                    onClick={() => setSelectedSlot(idx)}
+                  >
+                    <div style={{
+                      ...styles.inventoryBlock,
+                      background: BLOCK_PREVIEW[type],
+                    }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1470,8 +1901,8 @@ export default function MinecraftView({
             <div style={styles.instructionsKeys}>
               <span><b>WASD</b> move &nbsp; <b>Space</b> jump &nbsp; <b>Mouse</b> look</span>
               <span><b>Ctrl</b> sprint &nbsp; <b>Shift</b> sneak (edge-safe)</span>
-              <span><b>Left click</b> break &nbsp; <b>Right click</b> place &nbsp; <b>Middle click</b> pick block</span>
-              <span><b>E</b> / <b>Right click</b> open terminal &nbsp; <b>1-9</b> / <b>scroll</b> select block &nbsp; <b>ESC</b> release cursor</span>
+              <span><b>Left click</b> break &nbsp; <b>Right click</b> place / interact &nbsp; <b>Middle click</b> pick block</span>
+              <span><b>E</b> open inventory &nbsp; <b>1-9</b> / <b>scroll</b> select block &nbsp; <b>ESC</b> release cursor</span>
             </div>
           </div>
         </div>
@@ -1481,7 +1912,7 @@ export default function MinecraftView({
       {isLocked && (
         <div style={styles.hud}>
           <span style={styles.hudText}>
-            Terminals: {terminals.length} | {BLOCK_LABELS[HOTBAR_BLOCKS[selectedSlot]]} selected
+            Terminals: {terminals.length} | {BLOCK_LABELS[hotbarItems[selectedSlot]]} selected
           </span>
         </div>
       )}
@@ -1510,32 +1941,83 @@ const styles: Record<string, React.CSSProperties> = {
   crosshair: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 10 },
   crosshairH: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 22, height: 2, background: 'rgba(255,255,255,0.85)', borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.6)' },
   crosshairV: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 2, height: 22, background: 'rgba(255,255,255,0.85)', borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.6)' },
+  // MC-style hotbar: 9 square slots
   hotbar: {
-    position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
-    display: 'flex', flexDirection: 'column' as const, gap: 2, padding: 4,
-    background: 'rgba(0,0,0,0.65)', borderRadius: 8, border: '2px solid rgba(255,255,255,0.15)',
-  },
-  hotbarRow: {
-    display: 'flex', gap: 2,
+    position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
+    display: 'flex', gap: 2, padding: 2,
+    background: 'rgba(0,0,0,0.72)', borderRadius: 2, border: '2px solid rgba(100,100,100,0.6)',
+    imageRendering: 'pixelated' as const,
   },
   hotbarSlot: {
-    width: 42, height: 42, display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
-    justifyContent: 'center', borderRadius: 4, border: '2px solid transparent',
-    cursor: 'pointer', position: 'relative' as const, transition: 'border-color 0.1s',
+    width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: '2px solid rgba(80,80,80,0.5)', background: 'rgba(60,60,60,0.4)',
+    cursor: 'pointer', position: 'relative' as const,
   },
   hotbarSlotActive: {
-    borderColor: '#fff', background: 'rgba(255,255,255,0.12)',
+    border: '2px solid #fff', background: 'rgba(255,255,255,0.15)',
   },
   hotbarBlock: {
-    width: 22, height: 22, borderRadius: 3, border: '1px solid rgba(255,255,255,0.2)',
-  },
-  hotbarLabel: {
-    fontSize: 7, color: '#ccc', marginTop: 1, fontFamily: "'SF Mono', monospace",
-    textTransform: 'uppercase' as const, letterSpacing: 0.3,
+    width: 32, height: 32, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
+    imageRendering: 'pixelated' as const,
   },
   hotbarKey: {
-    position: 'absolute' as const, top: 1, right: 3, fontSize: 8, color: 'rgba(255,255,255,0.4)',
-    fontFamily: "'SF Mono', monospace", fontWeight: 700,
+    position: 'absolute' as const, top: 1, left: 3, fontSize: 9, color: 'rgba(255,255,255,0.5)',
+    fontFamily: "'SF Mono', monospace", fontWeight: 700, textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+  },
+  // Inventory overlay
+  inventoryOverlay: {
+    position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(0,0,0,0.65)', zIndex: 30, cursor: 'default',
+  },
+  inventoryPanel: {
+    background: 'rgba(50,50,50,0.92)', border: '3px solid rgba(100,100,100,0.7)',
+    borderRadius: 4, padding: '16px 20px', display: 'flex',
+    flexDirection: 'column' as const, gap: 10, maxWidth: 480, width: '100%',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+  },
+  inventoryTitle: {
+    fontSize: 16, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace",
+    textAlign: 'center' as const, letterSpacing: 1,
+  },
+  inventoryGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 3,
+    maxHeight: 300, overflowY: 'auto' as const, padding: 4,
+    background: 'rgba(0,0,0,0.3)', borderRadius: 2,
+  },
+  inventorySlot: {
+    width: 44, height: 44, display: 'flex', flexDirection: 'column' as const,
+    alignItems: 'center', justifyContent: 'center',
+    border: '1px solid rgba(80,80,80,0.6)', background: 'rgba(60,60,60,0.3)',
+    cursor: 'pointer', borderRadius: 2, transition: 'background 0.1s',
+  },
+  inventorySlotActive: {
+    border: '1px solid #fff', background: 'rgba(255,255,255,0.15)',
+  },
+  inventoryBlock: {
+    width: 28, height: 28, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
+  },
+  inventoryLabel: {
+    fontSize: 6, color: '#aaa', marginTop: 1, fontFamily: "'SF Mono', monospace",
+    textTransform: 'uppercase' as const, letterSpacing: 0.2, textAlign: 'center' as const,
+    overflow: 'hidden' as const, whiteSpace: 'nowrap' as const, maxWidth: 42,
+  },
+  inventoryHotbar: {
+    display: 'flex', flexDirection: 'column' as const, gap: 4, marginTop: 4,
+    borderTop: '1px solid rgba(100,100,100,0.5)', paddingTop: 8,
+  },
+  inventoryHotbarLabel: {
+    fontSize: 11, color: '#888', fontFamily: "'SF Mono', monospace", textAlign: 'center' as const,
+  },
+  inventoryHotbarRow: {
+    display: 'flex', gap: 3, justifyContent: 'center',
+  },
+  inventoryHotbarSlot: {
+    width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    border: '2px solid rgba(80,80,80,0.5)', background: 'rgba(60,60,60,0.4)',
+    cursor: 'pointer', borderRadius: 2,
+  },
+  inventoryHotbarSlotActive: {
+    border: '2px solid #fff', background: 'rgba(255,255,255,0.15)',
   },
   instructions: {
     position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
