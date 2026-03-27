@@ -656,8 +656,8 @@ function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
 }
 
 // ── Virtual terminal buffer (handles cursor positioning for TUI apps) ─
-const TERM_COLS = 32;
-const TERM_ROWS = 8;
+const TERM_COLS = 80;
+const TERM_ROWS = 24;
 
 class VTermBuffer {
   cols: number; rows: number;
@@ -773,30 +773,32 @@ interface TermScreen { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; 
 function renderTerminalScreen(canvas: HTMLCanvasElement, buffer: VTermBuffer, cursorOn: boolean) {
   const ctx = canvas.getContext('2d')!;
   const w = canvas.width, h = canvas.height;
+  const charW = (w - 4) / TERM_COLS;
+  const charH = (h - 4) / TERM_ROWS;
   ctx.fillStyle = '#0a1a15';
   ctx.fillRect(0, 0, w, h);
   // Scanline overlay
-  ctx.fillStyle = 'rgba(0,212,170,0.03)';
+  ctx.fillStyle = 'rgba(0,212,170,0.02)';
   for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
   // Text from virtual buffer
-  ctx.font = '14px monospace';
+  ctx.font = `${Math.floor(charH * 0.85)}px monospace`;
   ctx.fillStyle = '#00d4aa';
   const lines = buffer.getLines();
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], 6, 18 + i * 16);
+    ctx.fillText(lines[i], 2, 2 + charH * 0.8 + i * charH);
   }
   // Cursor at buffer position
   if (cursorOn && buffer.curRow < TERM_ROWS) {
-    const cx = 6 + buffer.curCol * 8.4;
-    const cy = buffer.curRow * 16 + 6;
-    ctx.fillRect(cx, cy, 8, 12);
+    const cx = 2 + buffer.curCol * charW;
+    const cy = 2 + buffer.curRow * charH;
+    ctx.fillRect(cx, cy, charW, charH);
   }
 }
 
 function createTermScreen(): TermScreen {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = 512;
+  canvas.height = 256;
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
