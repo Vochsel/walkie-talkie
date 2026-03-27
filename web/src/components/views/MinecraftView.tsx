@@ -2079,7 +2079,7 @@ export default function MinecraftView({
             const term = terminalsRef.current.find((t) => t.id === hit.terminalId);
             if (term?.name) {
               updateNameTag(term.name);
-              nameTagSprite.position.set(hit.blockPos.x, hit.blockPos.y + 0.9, hit.blockPos.z);
+              nameTagSprite.position.set(hit.blockPos.x, hit.blockPos.y + 0.5, hit.blockPos.z);
               nameTagSprite.visible = true;
             } else {
               nameTagSprite.visible = false;
