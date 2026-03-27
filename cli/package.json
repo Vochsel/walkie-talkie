@@ -1,6 +1,6 @@
 {
   "name": "@walkie-talkie/cli",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Remote terminal access from your browser",
   "bin": {
     "walkie-talkie": "dist/index.js"
