@@ -1166,7 +1166,7 @@ export default function MinecraftView({
     materials: Map<BlockType, THREE.Material | THREE.Material[]>;
     geometries: Map<BlockType, THREE.BoxGeometry>;
     raycaster: THREE.Raycaster;
-    highlightMesh: THREE.Mesh;
+    highlightMesh: THREE.LineSegments;
     atlasTexture: THREE.Texture;
   } | null>(null);
 
