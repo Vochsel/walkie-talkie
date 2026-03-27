@@ -136,7 +136,7 @@ async function main() {
   const lanIp = getLocalIp();
   const localUrl = `http://localhost:${port}`;
   const networkUrl = `http://${lanIp}:${port}`;
-  const openUrl = demoUrl(networkUrl, token.value);
+  const openUrl = demoUrl(localUrl, token.value);
 
   console.log(`  ${GREEN}${BOLD}Server running${RESET}`);
   console.log(`  ${DIM}Local:${RESET}   ${WHITE}${localUrl}${RESET}`);
@@ -168,7 +168,7 @@ async function main() {
   // Generate new token on SIGUSR1
   process.on('SIGUSR1', () => {
     const t = server.generateToken();
-    const url = demoUrl(networkUrl, t.value);
+    const url = demoUrl(localUrl, t.value);
     console.log(`  ${GREEN}New token:${RESET} ${CYAN}${BOLD}${t.value}${RESET}`);
     console.log(`  ${CYAN}${UNDERLINE}${url}${RESET}`);
   });
