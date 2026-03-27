@@ -548,6 +548,86 @@ function createAllGeometries(): Map<BlockType, THREE.BoxGeometry> {
   return geos;
 }
 
+// ── Isometric block preview renderer ────────────────────────────────
+// Renders each block type as an isometric 3D cube onto a small canvas,
+// cached as data URLs. Called once when the atlas texture loads.
+function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
+  const previews = new Map<BlockType, string>();
+  const t = atlas.width / ATLAS_TILES; // tile size in px (16)
+  const size = 48;
+  const w = 16, h = 8, d = 16;
+  const cx = size / 2;
+  const cyTop = (size - (2 * h + d)) / 2;
+
+  for (const type of ALL_BLOCKS) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+
+    const faces = BLOCK_FACES[type];
+    const topTile = faces[2];   // +y
+    const leftTile = faces[4];  // +z (front)
+    const rightTile = faces[0]; // +x
+
+    // Top face
+    ctx.setTransform(w / t, h / t, -w / t, h / t, cx, cyTop);
+    ctx.drawImage(atlas, topTile[0] * t, topTile[1] * t, t, t, 0, 0, t, t);
+    // Green tint for grass/leaves top
+    if (type === 'grass') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#59a833';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (type === 'leaves') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#4aaa2a';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // Left face (darker)
+    ctx.setTransform(w / t, h / t, 0, d / t, cx - w, cyTop + h);
+    ctx.drawImage(atlas, leftTile[0] * t, leftTile[1] * t, t, t, 0, 0, t, t);
+    if (type === 'grass') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#88cc88';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (type === 'leaves') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#4aaa2a';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0, 0, t, t);
+
+    // Right face (medium shade)
+    ctx.setTransform(w / t, -h / t, 0, d / t, cx, cyTop + 2 * h);
+    ctx.drawImage(atlas, rightTile[0] * t, rightTile[1] * t, t, t, 0, 0, t, t);
+    if (type === 'grass') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#88cc88';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (type === 'leaves') {
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#4aaa2a';
+      ctx.fillRect(0, 0, t, t);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(0, 0, t, t);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    previews.set(type, canvas.toDataURL());
+  }
+
+  return previews;
+}
+
 // ── Low-poly CRT computer model for terminal blocks ─────────────────
 function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   const group = new THREE.Group();
@@ -655,35 +735,49 @@ function createDoorModel(position: THREE.Vector3, isOpen: boolean, yaw: number):
 }
 
 // ── Torch model ─────────────────────────────────────────────────────
-function createTorchModel(position: THREE.Vector3): THREE.Group {
+function createTorchModel(position: THREE.Vector3, isWall = false, wallYaw = 0): THREE.Group {
   const group = new THREE.Group();
   group.position.copy(position);
   group.userData.blockType = 'torch';
 
-  // Stick
   const stickMat = new THREE.MeshLambertMaterial({ color: 0x8b6b4a });
-  const stick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), stickMat);
-  stick.position.y = -0.18;
-  stick.castShadow = true;
-  group.add(stick);
-
-  // Flame tip
   const flameMat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
-  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), flameMat);
-  flame.position.y = 0.15;
-  group.add(flame);
-
-  // Warm glow around flame
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.3 });
-  const glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), glowMat);
-  glow.position.y = 0.15;
-  group.add(glow);
 
-  // Point light for illumination
+  const stick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), stickMat);
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), flameMat);
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), glowMat);
   const light = new THREE.PointLight(0xffaa44, 1.2, 14);
-  light.position.y = 0.25;
   light.castShadow = false;
-  group.add(light);
+
+  if (isWall) {
+    // Wall torch: tilted 30° away from wall
+    group.rotation.y = wallYaw;
+    const tilt = new THREE.Group();
+    tilt.rotation.x = Math.PI / 5; // ~36° tilt
+    tilt.position.set(0, -0.1, -0.2);
+    stick.position.y = -0.1;
+    stick.castShadow = true;
+    tilt.add(stick);
+    flame.position.y = 0.22;
+    tilt.add(flame);
+    glow.position.y = 0.22;
+    tilt.add(glow);
+    light.position.y = 0.3;
+    tilt.add(light);
+    group.add(tilt);
+  } else {
+    // Ground torch: upright
+    stick.position.y = -0.18;
+    stick.castShadow = true;
+    group.add(stick);
+    flame.position.y = 0.15;
+    group.add(flame);
+    glow.position.y = 0.15;
+    group.add(glow);
+    light.position.y = 0.25;
+    group.add(light);
+  }
 
   return group;
 }
@@ -793,10 +887,12 @@ function buildWorldMeshes(
       continue;
     }
 
-    // Torch blocks use custom model
+    // Torch blocks use custom model (wall-mounted if rotation stored)
     if (type === 'torch') {
       for (const pos of positions) {
-        meshes.push(createTorchModel(pos));
+        const key = posKey(pos.x, pos.y, pos.z);
+        const yaw = terminalRotations?.get(key);
+        meshes.push(createTorchModel(pos, yaw !== undefined, yaw ?? 0));
       }
       continue;
     }
@@ -987,12 +1083,22 @@ function resolveXZ(
   hw: number,
   bodyH: number,
   eyeH: number,
+  grounded = false,
 ): number {
   const newVal = pos[axis] + vel[axis] * dt;
   const testPos = pos.clone();
   testPos[axis] = newVal;
 
   if (isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
+    // Auto-step: if on ground, try stepping up by half a block (stairs/slabs)
+    if (grounded) {
+      const stepPos = testPos.clone();
+      stepPos.y += 0.55;
+      if (!isPlayerColliding(world, stepPos, hw, bodyH, eyeH)) {
+        pos.y += 0.55;
+        return newVal;
+      }
+    }
     vel[axis] = 0;
     return pos[axis];
   }
@@ -1020,6 +1126,7 @@ export default function MinecraftView({
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const inventoryOpenRef = useRef(false);
   const hotbarItemsRef = useRef<BlockType[]>(DEFAULT_HOTBAR);
+  const [blockPreviews, setBlockPreviews] = useState<Map<BlockType, string>>(new Map());
 
   // Refs for game state (avoid re-renders)
   const worldRef = useRef<VoxelWorld | null>(null);
@@ -1129,18 +1236,44 @@ export default function MinecraftView({
     const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x4a8c3f, 0.3);
     scene.add(hemiLight);
 
-    // ── Sun & Moon ────────────────────────────────────────────────────
+    // ── Sun & Moon (flat squares like MC) ────────────────────────────
     const sunMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(5, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xffee88, fog: false }),
+      new THREE.PlaneGeometry(10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffee88, fog: false, side: THREE.DoubleSide }),
     );
     scene.add(sunMesh);
 
     const moonMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(3.5, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xddddff, fog: false }),
+      new THREE.PlaneGeometry(7, 7),
+      new THREE.MeshBasicMaterial({ color: 0xddddff, fog: false, side: THREE.DoubleSide }),
     );
     scene.add(moonMesh);
+
+    // ── Sunset/sunrise gradient ring ─────────────────────────────────
+    const sunsetCanvas = document.createElement('canvas');
+    sunsetCanvas.width = 1;
+    sunsetCanvas.height = 32;
+    const sctx = sunsetCanvas.getContext('2d')!;
+    const sgrad = sctx.createLinearGradient(0, 0, 0, 32);
+    sgrad.addColorStop(0, 'rgba(255,120,50,0)');
+    sgrad.addColorStop(0.3, 'rgba(255,100,40,0.5)');
+    sgrad.addColorStop(0.5, 'rgba(255,70,25,0.7)');
+    sgrad.addColorStop(0.7, 'rgba(255,100,40,0.5)');
+    sgrad.addColorStop(1, 'rgba(255,120,50,0)');
+    sctx.fillStyle = sgrad;
+    sctx.fillRect(0, 0, 1, 32);
+    const sunsetTex = new THREE.CanvasTexture(sunsetCanvas);
+    const sunsetMat = new THREE.MeshBasicMaterial({
+      map: sunsetTex, transparent: true, opacity: 0, fog: false,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const sunsetMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(95, 95, 18, 32, 1, true),
+      sunsetMat,
+    );
+    sunsetMesh.position.set(WORLD_SIZE / 2, 2, WORLD_SIZE / 2);
+    sunsetMesh.visible = false;
+    scene.add(sunsetMesh);
 
     // ── Stars ─────────────────────────────────────────────────────────
     const starsGeo = new THREE.BufferGeometry();
@@ -1235,7 +1368,9 @@ export default function MinecraftView({
 
     // Load texture atlas
     const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load('/minecraft.png');
+    const texture = textureLoader.load('/minecraft.png', () => {
+      setBlockPreviews(renderBlockPreviews(texture.image as HTMLImageElement));
+    });
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -1326,7 +1461,7 @@ export default function MinecraftView({
     // ── Raycast helper ──────────────────────────────────────────────
     const screenCenter = new THREE.Vector2(0, 0);
 
-    function raycastBlock(): { blockPos: THREE.Vector3; placePos: THREE.Vector3; blockType: BlockType; terminalId?: string } | null {
+    function raycastBlock(): { blockPos: THREE.Vector3; placePos: THREE.Vector3; blockType: BlockType; terminalId?: string; faceNormal: THREE.Vector3 } | null {
       raycaster.setFromCamera(screenCenter, camera);
       const intersects = raycaster.intersectObjects(state.worldMeshes, true);
       if (intersects.length === 0) return null;
@@ -1353,7 +1488,7 @@ export default function MinecraftView({
       const bt = world.get(bx, by, bz);
       const tid = bt === 'terminal' ? posToTerminalRef.current.get(posKey(bx, by, bz)) : undefined;
 
-      return { blockPos: new THREE.Vector3(bx, by, bz), placePos, blockType: bt || 'stone', terminalId: tid };
+      return { blockPos: new THREE.Vector3(bx, by, bz), placePos, blockType: bt || 'stone', terminalId: tid, faceNormal: normal };
     }
 
     // ── Mouse clicks: place/break/interact ──────────────────────────
@@ -1431,10 +1566,16 @@ export default function MinecraftView({
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
 
-        // Store rotation for blocks that need it (door, stairs, glass pane)
+        // Store rotation for blocks that need it
         if (selectedBlock === 'door' || selectedBlock === 'wood_stairs' || selectedBlock === 'cobblestone_stairs' || selectedBlock === 'glass_pane') {
           const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
           terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
+        }
+
+        // Wall torch: tilt if placed on a side face
+        if (selectedBlock === 'torch' && Math.abs(hit.faceNormal.y) < 0.5) {
+          const yaw = Math.atan2(hit.faceNormal.x, hit.faceNormal.z);
+          terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), yaw);
         }
 
         // If placing a terminal block, create a terminal facing the player
@@ -1577,8 +1718,8 @@ export default function MinecraftView({
         // Resolve Y first (gravity/jump), then X, then Z
         const yResult = resolveY(world, pos, vel, dt, hw, currentBodyH, currentEyeH);
         pos.y = yResult.y;
-        pos.x = resolveXZ(world, pos, vel, 'x', dt, hw, currentBodyH, currentEyeH);
-        pos.z = resolveXZ(world, pos, vel, 'z', dt, hw, currentBodyH, currentEyeH);
+        pos.x = resolveXZ(world, pos, vel, 'x', dt, hw, currentBodyH, currentEyeH, onGroundRef.current);
+        pos.z = resolveXZ(world, pos, vel, 'z', dt, hw, currentBodyH, currentEyeH, onGroundRef.current);
 
         // Ground detection
         onGroundRef.current = yResult.grounded || isOnGround(world, pos, hw, currentEyeH);
@@ -1653,7 +1794,9 @@ export default function MinecraftView({
       const orbitR = 85;
 
       sunMesh.position.set(wc, sunY * orbitR + 15, wc + sunX * orbitR);
+      sunMesh.lookAt(camera.position);
       moonMesh.position.set(wc, -sunY * orbitR + 15, wc - sunX * orbitR);
+      moonMesh.lookAt(camera.position);
 
       // Sun visibility above horizon
       const sunHeight = Math.max(0, Math.min(1, sunY * 2 + 0.5));
@@ -1697,6 +1840,13 @@ export default function MinecraftView({
       // Clouds drift
       cloudTex.offset.x += dt * 0.004;
       cloudTex.offset.x %= 1;
+
+      // Sunrise/sunset gradient ring
+      const sunsetIntensity = (sunHeight > 0.05 && sunHeight < 0.35)
+        ? Math.max(0, (1 - Math.abs(sunHeight - 0.2) / 0.15)) * 0.65
+        : 0;
+      sunsetMat.opacity = sunsetIntensity;
+      sunsetMesh.visible = sunsetIntensity > 0.01;
 
       renderer.render(scene, camera);
     };
@@ -1816,76 +1966,88 @@ export default function MinecraftView({
       {/* Hotbar — MC-style 9 slots */}
       {isLocked && (
         <div style={styles.hotbar}>
-          {hotbarItems.map((type, idx) => (
-            <div
-              key={idx}
-              style={{
-                ...styles.hotbarSlot,
-                ...(idx === selectedSlot ? styles.hotbarSlotActive : {}),
-              }}
-              onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(idx); }}
-            >
-              <div style={{
-                ...styles.hotbarBlock,
-                background: BLOCK_PREVIEW[type],
-                ...(type === 'glass' || type === 'glass_pane' ? { opacity: 0.5 } : {}),
-                ...(type === 'terminal' ? { boxShadow: '0 0 6px #00d4aa' } : {}),
-                ...(type === 'torch' ? { boxShadow: '0 0 6px #ffaa00' } : {}),
-              }} />
-              <span style={styles.hotbarKey}>{idx + 1}</span>
-            </div>
-          ))}
+          {hotbarItems.map((type, idx) => {
+            const previewUrl = blockPreviews.get(type);
+            return (
+              <div
+                key={idx}
+                style={{
+                  ...styles.hotbarSlot,
+                  ...(idx === selectedSlot ? styles.hotbarSlotActive : {}),
+                }}
+                onMouseDown={(e) => { e.stopPropagation(); setSelectedSlot(idx); }}
+              >
+                <div style={{
+                  ...styles.hotbarBlock,
+                  ...(previewUrl
+                    ? { backgroundImage: `url(${previewUrl})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }
+                    : { background: BLOCK_PREVIEW[type] }),
+                }} />
+                <span style={styles.hotbarKey}>{idx + 1}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Creative Inventory */}
       {inventoryOpen && (
-        <div style={styles.inventoryOverlay} onClick={() => { setInventoryOpen(false); }}>
+        <div style={styles.inventoryOverlay} onClick={() => {
+          setInventoryOpen(false);
+          sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+        }}>
           <div style={styles.inventoryPanel} onClick={(e) => e.stopPropagation()}>
             <div style={styles.inventoryTitle}>Inventory</div>
             <div style={styles.inventoryGrid}>
-              {ALL_BLOCKS.map((type) => (
-                <div
-                  key={type}
-                  style={{
-                    ...styles.inventorySlot,
-                    ...(hotbarItems[selectedSlot] === type ? styles.inventorySlotActive : {}),
-                  }}
-                  onClick={() => {
-                    const newItems = [...hotbarItems];
-                    newItems[selectedSlot] = type;
-                    setHotbarItems(newItems);
-                  }}
-                >
-                  <div style={{
-                    ...styles.inventoryBlock,
-                    background: BLOCK_PREVIEW[type],
-                    ...(type === 'glass' || type === 'glass_pane' ? { opacity: 0.5 } : {}),
-                    ...(type === 'terminal' ? { boxShadow: '0 0 4px #00d4aa' } : {}),
-                    ...(type === 'torch' ? { boxShadow: '0 0 4px #ffaa00' } : {}),
-                  }} />
-                  <span style={styles.inventoryLabel}>{BLOCK_LABELS[type]}</span>
-                </div>
-              ))}
+              {ALL_BLOCKS.map((type) => {
+                const previewUrl = blockPreviews.get(type);
+                return (
+                  <div
+                    key={type}
+                    style={{
+                      ...styles.inventorySlot,
+                      ...(hotbarItems[selectedSlot] === type ? styles.inventorySlotActive : {}),
+                    }}
+                    onClick={() => {
+                      const newItems = [...hotbarItems];
+                      newItems[selectedSlot] = type;
+                      setHotbarItems(newItems);
+                    }}
+                  >
+                    <div style={{
+                      ...styles.inventoryBlock,
+                      ...(previewUrl
+                        ? { backgroundImage: `url(${previewUrl})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }
+                        : { background: BLOCK_PREVIEW[type] }),
+                    }} />
+                    <span style={styles.inventoryLabel}>{BLOCK_LABELS[type]}</span>
+                  </div>
+                );
+              })}
             </div>
             <div style={styles.inventoryHotbar}>
               <div style={styles.inventoryHotbarLabel}>Hotbar</div>
               <div style={styles.inventoryHotbarRow}>
-                {hotbarItems.map((type, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      ...styles.inventoryHotbarSlot,
-                      ...(idx === selectedSlot ? styles.inventoryHotbarSlotActive : {}),
-                    }}
-                    onClick={() => setSelectedSlot(idx)}
-                  >
-                    <div style={{
-                      ...styles.inventoryBlock,
-                      background: BLOCK_PREVIEW[type],
-                    }} />
-                  </div>
-                ))}
+                {hotbarItems.map((type, idx) => {
+                  const previewUrl = blockPreviews.get(type);
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        ...styles.inventoryHotbarSlot,
+                        ...(idx === selectedSlot ? styles.inventoryHotbarSlotActive : {}),
+                      }}
+                      onClick={() => setSelectedSlot(idx)}
+                    >
+                      <div style={{
+                        ...styles.inventoryBlock,
+                        ...(previewUrl
+                          ? { backgroundImage: `url(${previewUrl})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }
+                          : { background: BLOCK_PREVIEW[type] }),
+                      }} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
