@@ -1336,6 +1336,7 @@ export default function MinecraftView({
 }: ViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
+  const [pendingBreak, setPendingBreak] = useState<{ blockPos: THREE.Vector3; terminalId: string } | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
@@ -1757,14 +1758,11 @@ export default function MinecraftView({
         const { blockPos, blockType, terminalId } = hit;
         if (blockType === 'bedrock') return; // don't break bedrock
 
-        // If it's a terminal block, kill the terminal
+        // Terminal blocks require confirmation before breaking
         if (blockType === 'terminal' && terminalId) {
-          killTerminal(terminalId);
-          const key = posKey(blockPos.x, blockPos.y, blockPos.z);
-          posToTerminalRef.current.delete(key);
-          terminalRotationsRef.current.delete(key);
-          terminalPositionsRef.current.delete(terminalId);
-          syncTerminalMaps();
+          document.exitPointerLock();
+          setPendingBreak({ blockPos: blockPos.clone(), terminalId });
+          return;
         }
 
         // Breaking a door removes both halves
@@ -2274,6 +2272,58 @@ export default function MinecraftView({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Terminal break confirmation */}
+      {pendingBreak && (
+        <div style={styles.inventoryOverlay} onClick={() => setPendingBreak(null)}>
+          <div style={{ ...styles.inventoryPanel, maxWidth: 360, gap: 16, textAlign: 'center' as const }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace" }}>
+              Destroy terminal?
+            </h3>
+            <p style={{ fontSize: 13, color: '#999', fontFamily: "'SF Mono', monospace", lineHeight: 1.5 }}>
+              This will kill the terminal session. This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
+              <button
+                onClick={() => {
+                  setPendingBreak(null);
+                  sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                }}
+                style={{
+                  padding: '8px 20px', borderRadius: 4, border: '1px solid rgba(100,100,100,0.6)',
+                  background: 'rgba(60,60,60,0.6)', color: '#ccc', cursor: 'pointer',
+                  fontFamily: "'SF Mono', monospace", fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { blockPos, terminalId } = pendingBreak;
+                  killTerminal(terminalId);
+                  const key = posKey(blockPos.x, blockPos.y, blockPos.z);
+                  posToTerminalRef.current.delete(key);
+                  terminalRotationsRef.current.delete(key);
+                  terminalPositionsRef.current.delete(terminalId);
+                  syncTerminalMaps();
+                  worldRef.current?.userDelete(blockPos.x, blockPos.y, blockPos.z);
+                  meshDirtyRef.current = true;
+                  if (worldRef.current) saveState('mc:worldDiff', worldRef.current.exportDiff());
+                  setPendingBreak(null);
+                  sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                }}
+                style={{
+                  padding: '8px 20px', borderRadius: 4, border: '1px solid rgba(200,60,60,0.6)',
+                  background: 'rgba(180,40,40,0.7)', color: '#fff', cursor: 'pointer',
+                  fontFamily: "'SF Mono', monospace", fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Destroy
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
