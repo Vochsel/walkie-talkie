@@ -531,10 +531,13 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
     color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.5,
   });
 
+  // Offset so model sits on bottom of block bounding box (y = -0.5)
+  const yOff = -0.16;
+
   // Monitor housing — boxy CRT shell
   const monitorGeo = new THREE.BoxGeometry(0.78, 0.52, 0.5);
   const monitor = new THREE.Mesh(monitorGeo, bodyMat);
-  monitor.position.set(0, 0.1, -0.03);
+  monitor.position.set(0, 0.1 + yOff, -0.03);
   monitor.castShadow = true;
   monitor.receiveShadow = true;
   group.add(monitor);
@@ -542,26 +545,26 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   // Screen bezel (dark inset frame)
   const bezelGeo = new THREE.BoxGeometry(0.62, 0.38, 0.02);
   const bezel = new THREE.Mesh(bezelGeo, darkMat);
-  bezel.position.set(0, 0.12, 0.225);
+  bezel.position.set(0, 0.12 + yOff, 0.225);
   group.add(bezel);
 
   // Screen (glowing terminal green)
   const screenGeo = new THREE.BoxGeometry(0.52, 0.3, 0.02);
   const screen = new THREE.Mesh(screenGeo, screenMat);
-  screen.position.set(0, 0.12, 0.235);
+  screen.position.set(0, 0.12 + yOff, 0.235);
   group.add(screen);
 
   // Stand / neck
   const standGeo = new THREE.BoxGeometry(0.14, 0.12, 0.14);
   const stand = new THREE.Mesh(standGeo, darkMat);
-  stand.position.set(0, -0.22, 0);
+  stand.position.set(0, -0.22 + yOff, 0);
   stand.castShadow = true;
   group.add(stand);
 
   // Base plate
   const baseGeo = new THREE.BoxGeometry(0.45, 0.04, 0.3);
   const base = new THREE.Mesh(baseGeo, bodyMat);
-  base.position.set(0, -0.32, 0);
+  base.position.set(0, -0.32 + yOff, 0);
   base.castShadow = true;
   base.receiveShadow = true;
   group.add(base);
@@ -569,7 +572,7 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   // Keyboard
   const kbGeo = new THREE.BoxGeometry(0.5, 0.03, 0.18);
   const kb = new THREE.Mesh(kbGeo, darkMat);
-  kb.position.set(0, -0.32, 0.34);
+  kb.position.set(0, -0.32 + yOff, 0.34);
   kb.castShadow = true;
   kb.receiveShadow = true;
   group.add(kb);
