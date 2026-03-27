@@ -1177,13 +1177,15 @@ function resolveXZ(
   testPos[axis] = newVal;
 
   if (isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
-    // Auto-step: if on ground, try stepping up by half a block (stairs/slabs)
+    // Auto-step: if on ground, try stepping up (0.55 for slabs, 1.05 for consecutive stairs)
     if (grounded) {
-      const stepPos = testPos.clone();
-      stepPos.y += 0.55;
-      if (!isPlayerColliding(world, stepPos, hw, bodyH, eyeH)) {
-        pos.y += 0.55;
-        return newVal;
+      for (const stepH of [0.55, 1.05]) {
+        const stepPos = testPos.clone();
+        stepPos.y += stepH;
+        if (!isPlayerColliding(world, stepPos, hw, bodyH, eyeH)) {
+          pos.y += stepH;
+          return newVal;
+        }
       }
     }
     vel[axis] = 0;
