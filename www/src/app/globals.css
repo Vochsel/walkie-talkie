@@ -52,6 +52,18 @@ code {
   font-size: 0.88em;
 }
 
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .hero-title { font-size: 40px !important; }
+  .section-heading { font-size: 26px !important; }
+  .cta-box { padding: 40px 24px !important; }
+  .cta-title { font-size: 28px !important; }
+  .nav-links { display: none !important; }
+  .copy-command { font-size: 13px !important; padding: 12px 14px !important; }
+}
+
 pre {
   font-family: 'Berkeley Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
   background: var(--bg-code);

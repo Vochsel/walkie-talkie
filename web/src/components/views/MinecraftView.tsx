@@ -1490,12 +1490,20 @@ export default function MinecraftView({
     const onPointerLockChange = () => {
       const locked = document.pointerLockElement === canvas;
       setIsLocked(locked);
-      if (locked) setHasStarted(true);
+      if (locked) {
+        setHasStarted(true);
+        setSettingsOpen(false);
+      } else if (!inventoryOpenRef.current && !popupTerminalIdRef.current) {
+        // Pointer lock lost (ESC) — show settings if nothing else is open
+        setSettingsOpen(true);
+      }
     };
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
     const requestLock = () => {
-      if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
+      if (document.pointerLockElement !== canvas && !settingsOpenRef.current && !inventoryOpenRef.current) {
+        canvas.requestPointerLock();
+      }
     };
     canvas.addEventListener('click', requestLock);
 
