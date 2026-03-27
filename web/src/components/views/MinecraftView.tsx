@@ -668,28 +668,28 @@ function renderTerminalScreen(canvas: HTMLCanvasElement, lines: string[], cursor
   ctx.fillStyle = '#0a1a15';
   ctx.fillRect(0, 0, w, h);
   // Scanline overlay
-  ctx.fillStyle = 'rgba(0,212,170,0.04)';
-  for (let y = 0; y < h; y += 2) ctx.fillRect(0, y, w, 1);
+  ctx.fillStyle = 'rgba(0,212,170,0.03)';
+  for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
   // Text
-  ctx.font = '9px monospace';
+  ctx.font = '14px monospace';
   ctx.fillStyle = '#00d4aa';
-  const visibleLines = lines.slice(-6);
+  const visibleLines = lines.slice(-8);
   for (let i = 0; i < visibleLines.length; i++) {
-    ctx.fillText(visibleLines[i].slice(0, 24), 3, 11 + i * 10);
+    ctx.fillText(visibleLines[i].slice(0, 32), 6, 18 + i * 16);
   }
   // Cursor
   if (cursorOn) {
     const lastLine = visibleLines[visibleLines.length - 1] ?? '';
-    const cx = 3 + Math.min(lastLine.length, 24) * 5.4;
-    const cy = Math.max(1, visibleLines.length - 1) * 10 + 2;
-    ctx.fillRect(cx, cy, 5, 8);
+    const cx = 6 + Math.min(lastLine.length, 32) * 8.4;
+    const cy = Math.max(1, visibleLines.length - 1) * 16 + 6;
+    ctx.fillRect(cx, cy, 8, 12);
   }
 }
 
 function createTermScreen(): TermScreen {
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 64;
+  canvas.width = 256;
+  canvas.height = 128;
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
@@ -713,24 +713,24 @@ function createCRTModel(position: THREE.Vector3, yaw = 0, screenTexture?: THREE.
   // Offset so model sits on bottom of block bounding box (y = -0.5)
   const yOff = -0.16;
 
-  // Monitor housing — boxy CRT shell
-  const monitorGeo = new THREE.BoxGeometry(0.78, 0.52, 0.5);
+  // Monitor housing — boxy CRT shell (larger for readability)
+  const monitorGeo = new THREE.BoxGeometry(0.88, 0.62, 0.5);
   const monitor = new THREE.Mesh(monitorGeo, bodyMat);
-  monitor.position.set(0, 0.1 + yOff, -0.03);
+  monitor.position.set(0, 0.14 + yOff, -0.03);
   monitor.castShadow = true;
   monitor.receiveShadow = true;
   group.add(monitor);
 
   // Screen bezel (dark inset frame)
-  const bezelGeo = new THREE.BoxGeometry(0.62, 0.38, 0.02);
+  const bezelGeo = new THREE.BoxGeometry(0.76, 0.5, 0.02);
   const bezel = new THREE.Mesh(bezelGeo, darkMat);
-  bezel.position.set(0, 0.12 + yOff, 0.225);
+  bezel.position.set(0, 0.16 + yOff, 0.225);
   group.add(bezel);
 
   // Screen (glowing terminal green or live texture)
-  const screenGeo = new THREE.BoxGeometry(0.52, 0.3, 0.02);
+  const screenGeo = new THREE.BoxGeometry(0.68, 0.42, 0.02);
   const screen = new THREE.Mesh(screenGeo, screenMat);
-  screen.position.set(0, 0.12 + yOff, 0.235);
+  screen.position.set(0, 0.16 + yOff, 0.235);
   group.add(screen);
 
   // Stand / neck
@@ -1216,6 +1216,7 @@ export default function MinecraftView({
   const [blockPreviews, setBlockPreviews] = useState<Map<BlockType, string>>(new Map());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsOpenRef = useRef(false);
+  const popupTerminalIdRef = useRef<string | null>(null);
   const [termScreensEnabled, setTermScreensEnabled] = usePersistedState('mc:termScreens', true);
   const termScreensRef = useRef<Map<string, TermScreen>>(new Map());
 
@@ -1278,6 +1279,7 @@ export default function MinecraftView({
   useEffect(() => { hotbarItemsRef.current = hotbarItems; }, [hotbarItems]);
   useEffect(() => { inventoryOpenRef.current = inventoryOpen; }, [inventoryOpen]);
   useEffect(() => { settingsOpenRef.current = settingsOpen; }, [settingsOpen]);
+  useEffect(() => { popupTerminalIdRef.current = popupTerminalId; }, [popupTerminalId]);
 
   const rebuildMeshes = useCallback(() => {
     const s = sceneObjsRef.current;
@@ -1538,17 +1540,12 @@ export default function MinecraftView({
           setInventoryOpen(true);
         }
       }
-      // Escape: close inventory/settings, or open settings
+      // Escape: close inventory or settings
       if (k === 'escape') {
         if (inventoryOpenRef.current) {
           setInventoryOpen(false);
-        } else if (settingsOpenRef.current) {
-          setSettingsOpen(false);
-          canvas.requestPointerLock();
-        } else if (document.pointerLockElement === canvas) {
-          // ESC releases pointer lock (browser default) — show settings
-          setSettingsOpen(true);
         }
+        // Settings open/close is handled by pointerlockchange
       }
       // Q to reset hotbar to defaults
       if (k === 'q' && document.pointerLockElement === canvas) {
