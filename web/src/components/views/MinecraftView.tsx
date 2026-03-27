@@ -559,12 +559,39 @@ function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
   const cx = size / 2;
   const cyTop = (size - (2 * h + d)) / 2;
 
+  // Blocks that use solid color instead of atlas texture
+  const SOLID_COLORS: Partial<Record<BlockType, [string, string, string]>> = {
+    terminal: ['#00d4aa', '#009977', '#00b894'],
+    torch:    ['#ffcc33', '#8b6b4a', '#a07844'],
+  };
+
   for (const type of ALL_BLOCKS) {
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
+
+    const solid = SOLID_COLORS[type];
+    if (solid) {
+      // Draw solid-color isometric cube
+      const [topCol, leftCol, rightCol] = solid;
+      // Top face
+      ctx.setTransform(w / t, h / t, -w / t, h / t, cx, cyTop);
+      ctx.fillStyle = topCol;
+      ctx.fillRect(0, 0, t, t);
+      // Left face
+      ctx.setTransform(w / t, h / t, 0, d / t, cx - w, cyTop + h);
+      ctx.fillStyle = leftCol;
+      ctx.fillRect(0, 0, t, t);
+      // Right face
+      ctx.setTransform(w / t, -h / t, 0, d / t, cx, cyTop + 2 * h);
+      ctx.fillStyle = rightCol;
+      ctx.fillRect(0, 0, t, t);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      previews.set(type, canvas.toDataURL());
+      continue;
+    }
 
     const faces = BLOCK_FACES[type];
     const topTile = faces[2];   // +y
@@ -1441,6 +1468,10 @@ export default function MinecraftView({
       // Escape also closes inventory
       if (k === 'escape' && inventoryOpenRef.current) {
         setInventoryOpen(false);
+      }
+      // Q to reset hotbar to defaults
+      if (k === 'q' && document.pointerLockElement === canvas) {
+        setHotbarItems([...DEFAULT_HOTBAR]);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => { keysRef.current.delete(e.key.toLowerCase()); };
