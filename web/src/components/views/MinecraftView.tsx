@@ -1086,7 +1086,7 @@ export default function MinecraftView({
         }
 
         // Place block — check it doesn't overlap with player
-        if (placePos.y < 0) return;
+        if (placePos.y < UNDERGROUND_DEPTH) return;
         if (world.has(placePos.x, placePos.y, placePos.z)) return;
 
         // Player collision check
@@ -1108,8 +1108,7 @@ export default function MinecraftView({
         if (selectedBlock === 'terminal') {
           pendingPlacementRef.current = placePos.clone();
           // Snap to nearest 90° facing the player
-          const raw = yawRef.current + Math.PI;
-          const snapped = Math.round(raw / (Math.PI / 2)) * (Math.PI / 2);
+          const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
           terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
           createTerminal(80, 24);
         }
