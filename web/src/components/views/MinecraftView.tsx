@@ -656,8 +656,8 @@ function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
 }
 
 // ── Terminal screen rendering ────────────────────────────────────────
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\r/g;
-function stripAnsi(s: string): string { return s.replace(ANSI_RE, ''); }
+const ANSI_RE = /\x1b\[[\?>=!]?[0-9;]*[A-Za-z~]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()#][A-Z0-9]|\x1b[>=]|\r|\x07|\x08/g;
+function stripAnsi(s: string): string { return s.replace(ANSI_RE, '').replace(/[\x00-\x1f]/g, ''); }
 
 interface TermScreen { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; lines: string[] }
 
