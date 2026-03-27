@@ -1408,9 +1408,9 @@ export default function MinecraftView({
     for (const m of worldMeshes) scene.add(m);
 
     // Block highlight wireframe
-    const highlightGeo = new THREE.BoxGeometry(1.005, 1.005, 1.005);
-    const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.5 });
-    const highlightMesh = new THREE.Mesh(highlightGeo, highlightMat);
+    const highlightGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.005, 1.005, 1.005));
+    const highlightMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+    const highlightMesh = new THREE.LineSegments(highlightGeo, highlightMat);
     highlightMesh.visible = false;
     scene.add(highlightMesh);
 
