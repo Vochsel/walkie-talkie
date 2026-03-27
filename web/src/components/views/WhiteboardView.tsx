@@ -13,8 +13,8 @@ interface NodeLayout {
   height: number;
 }
 
-const DEFAULT_NODE_WIDTH = 500;
-const DEFAULT_NODE_HEIGHT = 350;
+const DEFAULT_NODE_WIDTH = 1000;
+const DEFAULT_NODE_HEIGHT = 700;
 const STAGGER_OFFSET = 40;
 const MIN_NODE_WIDTH = 300;
 const MIN_NODE_HEIGHT = 200;

@@ -1394,6 +1394,8 @@ export default function MinecraftView({
   const selectedSlotRef = useRef(0);
   const meshDirtyRef = useRef(false);
   const doorStatesRef = useRef<Map<string, boolean>>(new Map());
+  const terminalsRef = useRef(terminals);
+  terminalsRef.current = terminals;
 
   // Terminal block tracking — persisted as plain objects
   const { ref: termPosObjRef, save: saveTermPositions } = usePersistedRef<Record<string, [number, number, number]>>('mc:termPositions', {});
@@ -1628,6 +1630,42 @@ export default function MinecraftView({
 
     const raycaster = new THREE.Raycaster();
     raycaster.far = 8;
+
+    // Name tag sprite (billboard text above terminal blocks)
+    const nameTagCanvas = document.createElement('canvas');
+    nameTagCanvas.width = 512;
+    nameTagCanvas.height = 64;
+    const nameTagTexture = new THREE.CanvasTexture(nameTagCanvas);
+    nameTagTexture.magFilter = THREE.LinearFilter;
+    nameTagTexture.minFilter = THREE.LinearFilter;
+    const nameTagMat = new THREE.SpriteMaterial({ map: nameTagTexture, transparent: true, opacity: 0.85, depthTest: false });
+    const nameTagSprite = new THREE.Sprite(nameTagMat);
+    nameTagSprite.visible = false;
+    nameTagSprite.scale.set(2.5, 0.3125, 1);
+    nameTagSprite.renderOrder = 999;
+    scene.add(nameTagSprite);
+    let lastNameTagText = '';
+
+    function updateNameTag(text: string) {
+      if (text === lastNameTagText) return;
+      lastNameTagText = text;
+      const ctx = nameTagCanvas.getContext('2d')!;
+      ctx.clearRect(0, 0, 512, 64);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      const metrics = (() => { ctx.font = '28px "SF Mono", "Fira Code", Menlo, monospace'; return ctx.measureText(text); })();
+      const pad = 16;
+      const bgW = Math.min(metrics.width + pad * 2, 510);
+      const bgX = (512 - bgW) / 2;
+      ctx.beginPath();
+      ctx.roundRect(bgX, 4, bgW, 52, 8);
+      ctx.fill();
+      ctx.font = '28px "SF Mono", "Fira Code", Menlo, monospace';
+      ctx.fillStyle = '#e6edf3';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 256, 32);
+      nameTagTexture.needsUpdate = true;
+    }
 
     const state = { renderer, scene, camera, animId: 0, worldMeshes, materials, geometries, raycaster, highlightMesh, atlasTexture: texture };
     sceneObjsRef.current = state;
@@ -2029,17 +2067,33 @@ export default function MinecraftView({
       camera.position.y += crouchCameraOffsetRef.current;
       camera.quaternion.setFromEuler(new THREE.Euler(pitchRef.current, yawRef.current, 0, 'YXZ'));
 
-      // Block highlight
+      // Block highlight + name tag
       if (document.pointerLockElement === canvas) {
         const hit = raycastBlock();
         if (hit) {
           highlightMesh.position.set(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
           highlightMesh.visible = true;
+
+          // Show name tag above terminal blocks with custom names
+          if (hit.blockType === 'terminal' && hit.terminalId) {
+            const term = terminalsRef.current.find((t) => t.id === hit.terminalId);
+            if (term?.name) {
+              updateNameTag(term.name);
+              nameTagSprite.position.set(hit.blockPos.x, hit.blockPos.y + 1.4, hit.blockPos.z);
+              nameTagSprite.visible = true;
+            } else {
+              nameTagSprite.visible = false;
+            }
+          } else {
+            nameTagSprite.visible = false;
+          }
         } else {
           highlightMesh.visible = false;
+          nameTagSprite.visible = false;
         }
       } else {
         highlightMesh.visible = false;
+        nameTagSprite.visible = false;
       }
 
       // Rebuild meshes if dirty (throttled to every 50ms)
@@ -2160,6 +2214,8 @@ export default function MinecraftView({
           else m.dispose();
         }
       });
+      nameTagMat.dispose();
+      nameTagTexture.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       sceneObjsRef.current = null;
