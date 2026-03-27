@@ -107,15 +107,18 @@ export class WalkieTalkieClient {
       this._isResuming = true;
     }
 
-    // Detect mixed content: HTTPS page trying to connect to HTTP/WS server
+    // Detect mixed content: HTTPS page trying to connect to non-localhost HTTP server.
+    // Browsers allow ws://localhost from HTTPS pages (localhost is a secure context),
+    // but block ws://<LAN-IP> and other non-localhost HTTP origins.
     if (
       typeof window !== 'undefined' &&
       window.location.protocol === 'https:' &&
-      this._serverUrl.startsWith('http://')
+      this._serverUrl.startsWith('http://') &&
+      !this._serverUrl.match(/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/)
     ) {
       this._errorReason =
         'Cannot connect to an insecure server (http://) from a secure page (https://). ' +
-        'Use the CLI server\'s --tls flag, or access this page over http:// instead.';
+        'Use http://localhost instead, or access this page over http://.';
       this.setState('error');
       return;
     }
