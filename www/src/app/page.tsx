@@ -448,12 +448,18 @@ export default function Page() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
+              gridTemplateColumns: 'repeat(2, 1fr)',
               gap: 2,
               marginBottom: 80,
             }}
           >
             {[
+              {
+                name: '@walkie-talkie/cli',
+                install: 'npx @walkie-talkie/cli@latest',
+                description: 'One-command terminal server. Generates tokens, prints QR codes, and opens the web client. No config required.',
+                tags: ['--open', '--port', '--dir', '--force'],
+              },
               {
                 name: '@walkie-talkie/react',
                 install: 'npm i @walkie-talkie/react',

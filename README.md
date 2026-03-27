@@ -10,15 +10,38 @@ npx walkie-talkie
 
 That's it. Open the URL printed in your terminal. Connect with the token.
 
+## Packages
+
+| Package | Description | Install |
+|---------|-------------|---------|
+| [`@walkie-talkie/cli`](./cli) | Standalone CLI launcher — the `npx` entry point | `npm i -g @walkie-talkie/cli` |
+| [`@walkie-talkie/react`](./react) | React hooks (`useWalkieTalkie`) and `TerminalView` component | `npm i @walkie-talkie/react` |
+| [`@walkie-talkie/client`](./client) | Framework-agnostic WebSocket client with auto-reconnect | `npm i @walkie-talkie/client` |
+| [`@walkie-talkie/server`](./server) | Express + WebSocket server with node-pty terminals | `npm i @walkie-talkie/server` |
+| [`@walkie-talkie/shared`](./shared) | Protocol types and constants | `npm i @walkie-talkie/shared` |
+
+## Demo
+
+The [`./web`](./web) directory is a full Next.js reference app that demonstrates how to use the packages together. It shows how to connect to a walkie-talkie server, manage terminals, and render them using `@walkie-talkie/react` — with 5 different view modes (classic tabs, sidebar, whiteboard, Minecraft 3D, and RPG).
+
+Run it locally:
+
+```bash
+pnpm dev        # starts CLI server on :3456 + web client on :3000
+```
+
 ## Architecture
 
 ```
 walkie-talkie/
   cli/        - Standalone CLI (npx walkie-talkie)
+  client/     - WebSocket client (framework-agnostic)
+  react/      - React hooks + TerminalView component
+  server/     - Express + WebSocket + node-pty server
   shared/     - Protocol types & constants
-  service/    - Electron tray app (optional, for system tray)
-  web/        - Next.js web client with xterm.js (5 view modes)
-  www/        - Landing page site (walkie-talkie.dev)
+  service/    - Electron tray app (optional)
+  web/        - Demo app — reference implementation using the packages
+  www/        - Landing page & docs (walkie-talkie.dev)
 ```
 
 ## Development
