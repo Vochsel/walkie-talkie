@@ -655,33 +655,140 @@ function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
   return previews;
 }
 
-// ── Terminal screen rendering ────────────────────────────────────────
-const ANSI_RE = /\x1b\[[\?>=!]?[0-9;]*[A-Za-z~]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()#][A-Z0-9]|\x1b[>=]|\r|\x07|\x08/g;
-function stripAnsi(s: string): string { return s.replace(ANSI_RE, '').replace(/[\x00-\x1f]/g, ''); }
+// ── Virtual terminal buffer (handles cursor positioning for TUI apps) ─
+const TERM_COLS = 32;
+const TERM_ROWS = 8;
 
-interface TermScreen { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; lines: string[] }
+class VTermBuffer {
+  cols: number; rows: number;
+  grid: string[][]; curRow = 0; curCol = 0;
 
-function renderTerminalScreen(canvas: HTMLCanvasElement, lines: string[], cursorOn: boolean) {
+  constructor(cols: number, rows: number) {
+    this.cols = cols; this.rows = rows;
+    this.grid = Array.from({ length: rows }, () => Array(cols).fill(' '));
+  }
+
+  write(data: string) {
+    let i = 0;
+    while (i < data.length) {
+      const ch = data[i];
+      if (ch === '\x1b') {
+        if (data[i + 1] === '[') {
+          // CSI sequence
+          i += 2;
+          let params = '';
+          while (i < data.length && ((data[i] >= '0' && data[i] <= '9') || data[i] === ';' || data[i] === '?' || data[i] === '>' || data[i] === '=')) {
+            params += data[i]; i++;
+          }
+          if (i < data.length) { this.handleCSI(params, data[i]); i++; }
+        } else if (data[i + 1] === ']') {
+          // OSC sequence — skip until BEL or ST
+          i += 2;
+          while (i < data.length && data[i] !== '\x07' && !(data[i] === '\x1b' && data[i + 1] === '\\')) i++;
+          if (data[i] === '\x07') i++; else if (data[i] === '\x1b') i += 2;
+        } else {
+          i += 2; // skip other escape sequences
+        }
+      } else if (ch === '\n') {
+        this.curRow++;
+        if (this.curRow >= this.rows) { this.scrollUp(); this.curRow = this.rows - 1; }
+        i++;
+      } else if (ch === '\r') {
+        this.curCol = 0; i++;
+      } else if (ch === '\x08') {
+        if (this.curCol > 0) this.curCol--; i++;
+      } else if (ch.charCodeAt(0) >= 32) {
+        if (this.curRow >= 0 && this.curRow < this.rows && this.curCol < this.cols) {
+          this.grid[this.curRow][this.curCol] = ch;
+        }
+        this.curCol++;
+        i++;
+      } else { i++; }
+    }
+  }
+
+  private handleCSI(params: string, cmd: string) {
+    const clean = params.replace(/^[?>=]/, '');
+    const args = clean.split(';').map(n => parseInt(n) || 0);
+    switch (cmd) {
+      case 'H': case 'f':
+        this.curRow = Math.min(this.rows - 1, Math.max(0, (args[0] || 1) - 1));
+        this.curCol = Math.min(this.cols - 1, Math.max(0, (args[1] || 1) - 1));
+        break;
+      case 'A': this.curRow = Math.max(0, this.curRow - (args[0] || 1)); break;
+      case 'B': this.curRow = Math.min(this.rows - 1, this.curRow + (args[0] || 1)); break;
+      case 'C': this.curCol = Math.min(this.cols - 1, this.curCol + (args[0] || 1)); break;
+      case 'D': this.curCol = Math.max(0, this.curCol - (args[0] || 1)); break;
+      case 'G': this.curCol = Math.min(this.cols - 1, Math.max(0, (args[0] || 1) - 1)); break;
+      case 'd': this.curRow = Math.min(this.rows - 1, Math.max(0, (args[0] || 1) - 1)); break;
+      case 'J':
+        if (args[0] === 2 || args[0] === 3) {
+          for (let r = 0; r < this.rows; r++) this.grid[r].fill(' ');
+        } else if (args[0] === 0) {
+          for (let c = this.curCol; c < this.cols; c++) this.grid[this.curRow][c] = ' ';
+          for (let r = this.curRow + 1; r < this.rows; r++) this.grid[r].fill(' ');
+        } else if (args[0] === 1) {
+          for (let r = 0; r < this.curRow; r++) this.grid[r].fill(' ');
+          for (let c = 0; c <= this.curCol; c++) this.grid[this.curRow][c] = ' ';
+        }
+        break;
+      case 'K':
+        if (!args[0] || args[0] === 0) {
+          for (let c = this.curCol; c < this.cols; c++) this.grid[this.curRow][c] = ' ';
+        } else if (args[0] === 1) {
+          for (let c = 0; c <= this.curCol; c++) this.grid[this.curRow][c] = ' ';
+        } else if (args[0] === 2) {
+          this.grid[this.curRow].fill(' ');
+        }
+        break;
+      case 'L': { // Insert lines
+        const n = args[0] || 1;
+        for (let j = 0; j < n; j++) {
+          this.grid.splice(this.curRow, 0, Array(this.cols).fill(' '));
+          this.grid.pop();
+        }
+        break;
+      }
+      case 'M': { // Delete lines
+        const n = args[0] || 1;
+        for (let j = 0; j < n; j++) {
+          this.grid.splice(this.curRow, 1);
+          this.grid.push(Array(this.cols).fill(' '));
+        }
+        break;
+      }
+    }
+  }
+
+  private scrollUp() {
+    this.grid.shift();
+    this.grid.push(Array(this.cols).fill(' '));
+  }
+
+  getLines(): string[] { return this.grid.map(row => row.join('')); }
+}
+
+interface TermScreen { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; buffer: VTermBuffer }
+
+function renderTerminalScreen(canvas: HTMLCanvasElement, buffer: VTermBuffer, cursorOn: boolean) {
   const ctx = canvas.getContext('2d')!;
   const w = canvas.width, h = canvas.height;
-  // Dark background
   ctx.fillStyle = '#0a1a15';
   ctx.fillRect(0, 0, w, h);
   // Scanline overlay
   ctx.fillStyle = 'rgba(0,212,170,0.03)';
   for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1);
-  // Text
+  // Text from virtual buffer
   ctx.font = '14px monospace';
   ctx.fillStyle = '#00d4aa';
-  const visibleLines = lines.slice(-8);
-  for (let i = 0; i < visibleLines.length; i++) {
-    ctx.fillText(visibleLines[i].slice(0, 32), 6, 18 + i * 16);
+  const lines = buffer.getLines();
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 6, 18 + i * 16);
   }
-  // Cursor
-  if (cursorOn) {
-    const lastLine = visibleLines[visibleLines.length - 1] ?? '';
-    const cx = 6 + Math.min(lastLine.length, 32) * 8.4;
-    const cy = Math.max(1, visibleLines.length - 1) * 16 + 6;
+  // Cursor at buffer position
+  if (cursorOn && buffer.curRow < TERM_ROWS) {
+    const cx = 6 + buffer.curCol * 8.4;
+    const cy = buffer.curRow * 16 + 6;
     ctx.fillRect(cx, cy, 8, 12);
   }
 }
@@ -693,8 +800,10 @@ function createTermScreen(): TermScreen {
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;
-  renderTerminalScreen(canvas, ['$ ready'], true);
-  return { canvas, texture, lines: ['$ ready'] };
+  const buffer = new VTermBuffer(TERM_COLS, TERM_ROWS);
+  buffer.write('$ ready');
+  renderTerminalScreen(canvas, buffer, true);
+  return { canvas, texture, buffer };
 }
 
 // ── Low-poly CRT computer model for terminal blocks ─────────────────
@@ -1177,14 +1286,31 @@ function resolveXZ(
   testPos[axis] = newVal;
 
   if (isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
-    // Auto-step: if on ground, try stepping up (0.55 for slabs, 1.05 for consecutive stairs)
+    // Auto-step: only for stair blocks, not full 1x1x1 blocks
     if (grounded) {
-      for (const stepH of [0.55, 1.05]) {
-        const stepPos = testPos.clone();
-        stepPos.y += stepH;
-        if (!isPlayerColliding(world, stepPos, hw, bodyH, eyeH)) {
-          pos.y += stepH;
-          return newVal;
+      const bb = playerAABB(testPos, hw, bodyH, eyeH);
+      let blockedByFullBlock = false;
+      for (let bx = Math.round(bb.minX); bx <= Math.round(bb.maxX) && !blockedByFullBlock; bx++) {
+        for (let by = Math.round(bb.minY); by <= Math.round(bb.maxY) && !blockedByFullBlock; by++) {
+          for (let bz = Math.round(bb.minZ); bz <= Math.round(bb.maxZ) && !blockedByFullBlock; bz++) {
+            if (!world.isSolid(bx, by, bz)) continue;
+            const bt = world.get(bx, by, bz);
+            if (bt !== 'wood_stairs' && bt !== 'cobblestone_stairs') {
+              if (overlapsBlock(bb.minX, bb.maxX, bb.minY, bb.maxY, bb.minZ, bb.maxZ, bx, by, bz)) {
+                blockedByFullBlock = true;
+              }
+            }
+          }
+        }
+      }
+      if (!blockedByFullBlock) {
+        for (const stepH of [0.55, 1.05]) {
+          const stepPos = testPos.clone();
+          stepPos.y += stepH;
+          if (!isPlayerColliding(world, stepPos, hw, bodyH, eyeH)) {
+            pos.y += stepH;
+            return newVal;
+          }
         }
       }
     }
@@ -1985,7 +2111,7 @@ export default function MinecraftView({
       // Terminal screen cursor blink (2x/sec)
       const cursorOn = Math.floor(time * 2) % 2 === 0;
       for (const [, screen] of termScreensRef.current) {
-        renderTerminalScreen(screen.canvas, screen.lines, cursorOn);
+        renderTerminalScreen(screen.canvas, screen.buffer, cursorOn);
         screen.texture.needsUpdate = true;
       }
 
@@ -2279,13 +2405,10 @@ export default function MinecraftView({
           onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
           registerOutput={(handler) => registerOutputHandler(t.id, (data) => {
             handler(data);
-            if (termScreensRef.current.has(t.id)) {
-              const screen = termScreensRef.current.get(t.id)!;
-              const clean = stripAnsi(data);
-              const newLines = clean.split('\n').filter(l => l.length > 0);
-              screen.lines.push(...newLines);
-              if (screen.lines.length > 20) screen.lines = screen.lines.slice(-20);
-              renderTerminalScreen(screen.canvas, screen.lines, true);
+            const screen = termScreensRef.current.get(t.id);
+            if (screen) {
+              screen.buffer.write(data);
+              renderTerminalScreen(screen.canvas, screen.buffer, true);
               screen.texture.needsUpdate = true;
             }
           })}
