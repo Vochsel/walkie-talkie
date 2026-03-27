@@ -436,36 +436,280 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Build your own */}
+      {/* Packages */}
       <section id="build" style={sectionStyle}>
         <div style={container}>
-          <h2 style={sectionHeading}>Build on top of it</h2>
+          <h2 style={sectionHeading}>Packages</h2>
           <p style={sectionSub}>
-            Remote terminal access as a primitive. What you build with it is up to you.
+            Modular packages you can use together or independently. Install what you need.
           </p>
+
+          {/* Package cards */}
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 12,
+              gap: 2,
               marginBottom: 80,
             }}
           >
-            <Card
-              title="Custom dev environments"
-              description="Build agent UIs, terminal dashboards, or AI-powered dev tools on top of the WebSocket protocol."
-            />
-            <Card
-              title="Client libraries"
-              description="Drop in the React hooks or connect directly via WebSocket. TypeScript, Python, Go — whatever you're working in."
-            />
-            <Card
-              title="AI agent integration"
-              description="Give your AI agents a real terminal. Code execution, system access, tool use through an authenticated connection."
-            />
+            {[
+              {
+                name: '@walkie-talkie/react',
+                install: 'npm i @walkie-talkie/react',
+                description: 'React hooks and a drop-in terminal component. useWalkieTalkie() for connection state, TerminalView for rendering.',
+                tags: ['useWalkieTalkie', 'TerminalView', 'defaultTheme'],
+              },
+              {
+                name: '@walkie-talkie/client',
+                install: 'npm i @walkie-talkie/client',
+                description: 'Framework-agnostic WebSocket client. Auto-reconnect with exponential backoff, session resumption, and typed messages.',
+                tags: ['WalkieTalkieClient', 'ConnectionState', 'saveConnection'],
+              },
+              {
+                name: '@walkie-talkie/shared',
+                install: 'npm i @walkie-talkie/shared',
+                description: 'Protocol types and constants. Use this to build your own client in any language or runtime.',
+                tags: ['ServerMessage', 'ClientMessage', 'TerminalInfo'],
+              },
+            ].map((pkg) => (
+              <div
+                key={pkg.name}
+                style={{
+                  padding: '28px 24px',
+                  borderRadius: 12,
+                  border: `1px solid ${BORDER}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                <code
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: TEXT,
+                  }}
+                >
+                  {pkg.name}
+                </code>
+                <p style={{ fontSize: 14, color: TEXT_SEC, lineHeight: 1.6, margin: 0, flex: 1 }}>
+                  {pkg.description}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {pkg.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        color: TEXT_MUTED,
+                        background: SURFACE,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 4,
+                        padding: '2px 8px',
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <div
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 12,
+                    color: TEXT_MUTED,
+                    background: SURFACE,
+                    borderRadius: 6,
+                    padding: '8px 12px',
+                    marginTop: 4,
+                  }}
+                >
+                  <span style={{ color: TEXT_MUTED, opacity: 0.6 }}>$ </span>
+                  {pkg.install}
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Code example */}
+          {/* React example */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 48,
+              alignItems: 'start',
+              marginBottom: 80,
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: TEXT,
+                  marginBottom: 10,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Custom terminal UI in minutes
+              </h3>
+              <p style={{ fontSize: 15, color: TEXT_SEC, lineHeight: 1.6, marginBottom: 28 }}>
+                The React package gives you everything you need to build custom terminal experiences. Full xterm.js rendering with auto-resize, theming, and connection management out of the box.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { msg: 'useWalkieTalkie()', desc: 'Connection state, terminal list, I/O' },
+                  { msg: 'TerminalView', desc: 'Drop-in xterm.js component' },
+                  { msg: 'defaultTheme', desc: 'Pre-built terminal color scheme' },
+                  { msg: 'usePersistedState', desc: 'localStorage-backed React state' },
+                ].map((item) => (
+                  <div key={item.msg} style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                    <code
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 13,
+                        color: TEXT,
+                        background: SURFACE,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 6,
+                        padding: '4px 10px',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.msg}
+                    </code>
+                    <span style={{ fontSize: 14, color: TEXT_SEC }}>{item.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <CodeBlock title="MyTerminal.tsx">
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#c586c0' }}>import</span>
+                <span style={{ color: '#edecec' }}> {'{ '}</span>
+                <span style={{ color: '#9cdcfe' }}>useWalkieTalkie</span>
+                <span style={{ color: '#edecec' }}>{', '}</span>
+                <span style={{ color: '#9cdcfe' }}>TerminalView</span>
+                <span style={{ color: '#edecec' }}>{' }'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>from</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#ce9178' }}>&apos;@walkie-talkie/react&apos;</span>
+                <span style={{ color: '#edecec' }}>;</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#c586c0' }}>function</span>
+                <span style={{ color: '#dcdcaa' }}> App</span>
+                <span style={{ color: '#edecec' }}>() {'{'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>const</span>
+                <span style={{ color: '#edecec' }}> {'{ '}</span>
+                <span style={{ color: '#9cdcfe' }}>connect</span>
+                <span style={{ color: '#edecec' }}>{', '}</span>
+                <span style={{ color: '#9cdcfe' }}>terminals</span>
+                <span style={{ color: '#edecec' }}>{', '}</span>
+                <span style={{ color: '#9cdcfe' }}>sendInput</span>
+                <span style={{ color: '#edecec' }}>,</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'    '}</span>
+                <span style={{ color: '#9cdcfe' }}>resizeTerminal</span>
+                <span style={{ color: '#edecec' }}>{', '}</span>
+                <span style={{ color: '#9cdcfe' }}>registerOutputHandler</span>
+                <span style={{ color: '#edecec' }}>{', '}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'    '}</span>
+                <span style={{ color: '#9cdcfe' }}>createTerminal</span>
+                <span style={{ color: '#edecec' }}>{' } = '}</span>
+                <span style={{ color: '#dcdcaa' }}>useWalkieTalkie</span>
+                <span style={{ color: '#edecec' }}>();</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>return</span>
+                <span style={{ color: '#edecec' }}> (</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'    '}</span>
+                <span style={{ color: '#808080' }}>{'<'}</span>
+                <span style={{ color: '#4ec9b0' }}>TerminalView</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'      '}</span>
+                <span style={{ color: '#9cdcfe' }}>terminalId</span>
+                <span style={{ color: '#edecec' }}>=</span>
+                <span style={{ color: '#edecec' }}>{'{'}</span>
+                <span style={{ color: '#9cdcfe' }}>terminals</span>
+                <span style={{ color: '#edecec' }}>[</span>
+                <span style={{ color: '#b5cea8' }}>0</span>
+                <span style={{ color: '#edecec' }}>].</span>
+                <span style={{ color: '#9cdcfe' }}>id</span>
+                <span style={{ color: '#edecec' }}>{'}'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'      '}</span>
+                <span style={{ color: '#9cdcfe' }}>isActive</span>
+                <span style={{ color: '#edecec' }}>=</span>
+                <span style={{ color: '#edecec' }}>{'{'}</span>
+                <span style={{ color: '#569cd6' }}>true</span>
+                <span style={{ color: '#edecec' }}>{'}'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'      '}</span>
+                <span style={{ color: '#9cdcfe' }}>onInput</span>
+                <span style={{ color: '#edecec' }}>=</span>
+                <span style={{ color: '#edecec' }}>{'{'}</span>
+                <span style={{ color: '#9cdcfe' }}>d</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#c586c0' }}>=&gt;</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#dcdcaa' }}>sendInput</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#9cdcfe' }}>id</span>
+                <span style={{ color: '#edecec' }}>, </span>
+                <span style={{ color: '#9cdcfe' }}>d</span>
+                <span style={{ color: '#edecec' }}>){'}'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'      '}</span>
+                <span style={{ color: '#9cdcfe' }}>onResize</span>
+                <span style={{ color: '#edecec' }}>=</span>
+                <span style={{ color: '#edecec' }}>{'{'}</span>
+                <span style={{ color: '#9cdcfe' }}>resizeTerminal</span>
+                <span style={{ color: '#edecec' }}>{'}'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'      '}</span>
+                <span style={{ color: '#9cdcfe' }}>registerOutput</span>
+                <span style={{ color: '#edecec' }}>=</span>
+                <span style={{ color: '#edecec' }}>{'{'}</span>
+                <span style={{ color: '#9cdcfe' }}>registerOutputHandler</span>
+                <span style={{ color: '#edecec' }}>{'}'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'    '}</span>
+                <span style={{ color: '#808080' }}>/&gt;</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  )'}</span>
+                <span style={{ color: '#edecec' }}>;</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'}'}</span>
+              </div>
+            </CodeBlock>
+          </div>
+
+          {/* Client example */}
           <div
             style={{
               display: 'grid',
@@ -484,17 +728,17 @@ export default function Page() {
                   letterSpacing: '-0.02em',
                 }}
               >
-                Simple WebSocket API
+                Or go framework-agnostic
               </h3>
               <p style={{ fontSize: 15, color: TEXT_SEC, lineHeight: 1.6, marginBottom: 28 }}>
-                Four messages to get a working terminal client.
+                The client package handles WebSocket connections, auth, and reconnection. No React required — use it with any framework or vanilla JS.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { msg: 'auth', desc: 'Authenticate with your token' },
-                  { msg: 'terminal:create', desc: 'Spawn a new terminal session' },
-                  { msg: 'terminal:input', desc: 'Send keystrokes' },
-                  { msg: 'terminal:output', desc: 'Receive terminal data' },
+                  { msg: 'connect()', desc: 'Authenticate and open a session' },
+                  { msg: 'onStateChange()', desc: 'Subscribe to connection state' },
+                  { msg: 'onMessage()', desc: 'Handle all server messages' },
+                  { msg: 'resumeSession()', desc: 'Reconnect to an existing session' },
                 ].map((item) => (
                   <div key={item.msg} style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
                     <code
@@ -518,80 +762,64 @@ export default function Page() {
             </div>
             <CodeBlock title="client.ts">
               <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#c586c0' }}>import</span>
+                <span style={{ color: '#edecec' }}> {'{ '}</span>
+                <span style={{ color: '#9cdcfe' }}>WalkieTalkieClient</span>
+                <span style={{ color: '#edecec' }}>{' }'}</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'  '}</span>
+                <span style={{ color: '#c586c0' }}>from</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#ce9178' }}>&apos;@walkie-talkie/client&apos;</span>
+                <span style={{ color: '#edecec' }}>;</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
                 <span style={{ color: '#c586c0' }}>const</span>
-                <span style={{ color: '#edecec' }}> ws </span>
+                <span style={{ color: '#edecec' }}> client </span>
                 <span style={{ color: '#c586c0' }}>=</span>
                 <span style={{ color: '#edecec' }}> </span>
                 <span style={{ color: '#c586c0' }}>new</span>
-                <span style={{ color: '#dcdcaa' }}> WebSocket</span>
+                <span style={{ color: '#dcdcaa' }}> WalkieTalkieClient</span>
+                <span style={{ color: '#edecec' }}>();</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>client.</span>
+                <span style={{ color: '#dcdcaa' }}>onStateChange</span>
                 <span style={{ color: '#edecec' }}>(</span>
-                <span style={{ color: '#ce9178' }}>&apos;ws://localhost:3456/ws&apos;</span>
-                <span style={{ color: '#edecec' }}>);</span>
-              </div>
-              <div style={{ height: 4 }} />
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#6a9955' }}>{'// Authenticate'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>ws.</span>
-                <span style={{ color: '#dcdcaa' }}>send</span>
-                <span style={{ color: '#edecec' }}>(JSON.</span>
-                <span style={{ color: '#dcdcaa' }}>stringify</span>
-                <span style={{ color: '#edecec' }}>(</span>
-                <span style={{ color: '#edecec' }}>{'{ '}</span>
-                <span style={{ color: '#9cdcfe' }}>type</span>
-                <span style={{ color: '#edecec' }}>: </span>
-                <span style={{ color: '#ce9178' }}>&apos;auth&apos;</span>
-                <span style={{ color: '#edecec' }}>, </span>
-                <span style={{ color: '#9cdcfe' }}>token</span>
-                <span style={{ color: '#edecec' }}>: </span>
-                <span style={{ color: '#ce9178' }}>&apos;your-token&apos;</span>
-                <span style={{ color: '#edecec' }}>{' }'}</span>
-                <span style={{ color: '#edecec' }}>));</span>
-              </div>
-              <div style={{ height: 4 }} />
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#6a9955' }}>{'// Create a terminal'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>ws.</span>
-                <span style={{ color: '#dcdcaa' }}>send</span>
-                <span style={{ color: '#edecec' }}>(JSON.</span>
-                <span style={{ color: '#dcdcaa' }}>stringify</span>
-                <span style={{ color: '#edecec' }}>(</span>
-                <span style={{ color: '#edecec' }}>{'{ '}</span>
-                <span style={{ color: '#9cdcfe' }}>type</span>
-                <span style={{ color: '#edecec' }}>: </span>
-                <span style={{ color: '#ce9178' }}>&apos;terminal:create&apos;</span>
-                <span style={{ color: '#edecec' }}>{' }'}</span>
-                <span style={{ color: '#edecec' }}>));</span>
-              </div>
-              <div style={{ height: 4 }} />
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#6a9955' }}>{'// Handle output'}</span>
-              </div>
-              <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>ws.</span>
-                <span style={{ color: '#9cdcfe' }}>onmessage</span>
-                <span style={{ color: '#edecec' }}> = (</span>
-                <span style={{ color: '#9cdcfe' }}>e</span>
-                <span style={{ color: '#edecec' }}>) </span>
+                <span style={{ color: '#9cdcfe' }}>state</span>
+                <span style={{ color: '#edecec' }}> </span>
                 <span style={{ color: '#c586c0' }}>=&gt;</span>
                 <span style={{ color: '#edecec' }}> {'{'}</span>
               </div>
               <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>{'  '}</span>
-                <span style={{ color: '#c586c0' }}>const</span>
-                <span style={{ color: '#edecec' }}> msg = JSON.</span>
-                <span style={{ color: '#dcdcaa' }}>parse</span>
-                <span style={{ color: '#edecec' }}>(e.data);</span>
+                <span style={{ color: '#edecec' }}>{'  '}console.</span>
+                <span style={{ color: '#dcdcaa' }}>log</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#ce9178' }}>&apos;State:&apos;</span>
+                <span style={{ color: '#edecec' }}>, state);</span>
+              </div>
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>{'}'});</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#edecec' }}>client.</span>
+                <span style={{ color: '#dcdcaa' }}>onMessage</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#9cdcfe' }}>msg</span>
+                <span style={{ color: '#edecec' }}> </span>
+                <span style={{ color: '#c586c0' }}>=&gt;</span>
+                <span style={{ color: '#edecec' }}> {'{'}</span>
               </div>
               <div style={{ whiteSpace: 'pre' }}>
                 <span style={{ color: '#edecec' }}>{'  '}</span>
                 <span style={{ color: '#c586c0' }}>if</span>
                 <span style={{ color: '#edecec' }}> (msg.type === </span>
                 <span style={{ color: '#ce9178' }}>&apos;terminal:output&apos;</span>
-                <span style={{ color: '#edecec' }}>) {'{'}</span>
+                <span style={{ color: '#edecec' }}>)</span>
               </div>
               <div style={{ whiteSpace: 'pre' }}>
                 <span style={{ color: '#edecec' }}>{'    '}terminal.</span>
@@ -599,10 +827,18 @@ export default function Page() {
                 <span style={{ color: '#edecec' }}>(msg.data);</span>
               </div>
               <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>{'  }'}</span>
+                <span style={{ color: '#edecec' }}>{'}'});</span>
+              </div>
+              <div style={{ height: 8 }} />
+              <div style={{ whiteSpace: 'pre' }}>
+                <span style={{ color: '#6a9955' }}>{'// Connect with server URL + token'}</span>
               </div>
               <div style={{ whiteSpace: 'pre' }}>
-                <span style={{ color: '#edecec' }}>{'};'}</span>
+                <span style={{ color: '#edecec' }}>client.</span>
+                <span style={{ color: '#dcdcaa' }}>connect</span>
+                <span style={{ color: '#edecec' }}>(</span>
+                <span style={{ color: '#ce9178' }}>&apos;ws://localhost:3456&apos;</span>
+                <span style={{ color: '#edecec' }}>, token);</span>
               </div>
             </CodeBlock>
           </div>
