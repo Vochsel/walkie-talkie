@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { TerminalInfo } from '@walkie-talkie/shared';
 
 interface TerminalTabsProps {
@@ -8,6 +9,7 @@ interface TerminalTabsProps {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onCreate: () => void;
+  onRename?: (id: string, name: string) => void;
 }
 
 export default function TerminalTabs({
@@ -16,7 +18,26 @@ export default function TerminalTabs({
   onSelect,
   onClose,
   onCreate,
+  onRename,
 }: TerminalTabsProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const getDisplayName = (term: TerminalInfo, idx: number) =>
+    term.name || `${term.shell.split('/').pop()} #${idx + 1}`;
+
+  const startEditing = (term: TerminalInfo, idx: number) => {
+    if (!onRename) return;
+    setEditingId(term.id);
+    setEditValue(term.name || `${term.shell.split('/').pop()} #${idx + 1}`);
+  };
+
+  const commitEdit = (id: string) => {
+    const trimmed = editValue.trim();
+    if (trimmed && onRename) onRename(id, trimmed);
+    setEditingId(null);
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.tabs}>
@@ -29,9 +50,30 @@ export default function TerminalTabs({
             }}
             onClick={() => onSelect(term.id)}
           >
-            <span style={styles.tabLabel}>
-              {term.shell.split('/').pop()} #{idx + 1}
-            </span>
+            {editingId === term.id ? (
+              <input
+                style={styles.tabInput}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => commitEdit(term.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitEdit(term.id);
+                  if (e.key === 'Escape') setEditingId(null);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+              />
+            ) : (
+              <span
+                style={styles.tabLabel}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  startEditing(term, idx);
+                }}
+              >
+                {getDisplayName(term, idx)}
+              </span>
+            )}
             <button
               style={styles.closeBtn}
               onClick={(e) => {
@@ -93,6 +135,17 @@ const styles: Record<string, React.CSSProperties> = {
   tabLabel: {
     whiteSpace: 'nowrap' as const,
     fontFamily: "'SF Mono', monospace",
+  },
+  tabInput: {
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 3,
+    color: '#e6edf3',
+    fontSize: 13,
+    fontFamily: "'SF Mono', monospace",
+    padding: '1px 4px',
+    outline: 'none',
+    width: 120,
   },
   closeBtn: {
     background: 'none',

@@ -18,6 +18,7 @@ export default function SidebarView({
   sendInput,
   resizeTerminal,
   killTerminal,
+  renameTerminal,
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
@@ -26,6 +27,8 @@ export default function SidebarView({
   ]);
   const [editingGroup, setEditingGroup] = useState<number | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
+  const [editingTerminal, setEditingTerminal] = useState<string | null>(null);
+  const [editTerminalName, setEditTerminalName] = useState('');
   const [hoveredTerminal, setHoveredTerminal] = useState<string | null>(null);
   const [draggingTerminal, setDraggingTerminal] = useState<string | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<number | null>(null);
@@ -137,6 +140,20 @@ export default function SidebarView({
   const getShellDisplayName = (shell: string): string => {
     const parts = shell.split('/');
     return parts[parts.length - 1];
+  };
+
+  const getTerminalDisplayName = (term: { name?: string; shell: string }): string =>
+    term.name || getShellDisplayName(term.shell);
+
+  const startEditingTerminal = (term: { id: string; name?: string; shell: string }) => {
+    setEditingTerminal(term.id);
+    setEditTerminalName(getTerminalDisplayName(term));
+  };
+
+  const commitTerminalName = (id: string) => {
+    const trimmed = editTerminalName.trim();
+    if (trimmed) renameTerminal(id, trimmed);
+    setEditingTerminal(null);
   };
 
   return (
@@ -253,15 +270,36 @@ export default function SidebarView({
                           onDragEnd={handleDragEnd}
                         >
                           <span style={styles.terminalIcon}>&#9632;</span>
-                          <span
-                            style={{
-                              ...styles.terminalName,
-                              ...(isActive ? styles.terminalNameActive : {}),
-                            }}
-                          >
-                            {getShellDisplayName(term.shell)}
-                          </span>
-                          <span style={styles.terminalPid}>:{term.pid}</span>
+                          {editingTerminal === term.id ? (
+                            <input
+                              style={styles.terminalNameInput}
+                              value={editTerminalName}
+                              onChange={(e) => setEditTerminalName(e.target.value)}
+                              onBlur={() => commitTerminalName(term.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitTerminalName(term.id);
+                                if (e.key === 'Escape') setEditingTerminal(null);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                            />
+                          ) : (
+                            <>
+                              <span
+                                style={{
+                                  ...styles.terminalName,
+                                  ...(isActive ? styles.terminalNameActive : {}),
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingTerminal(term);
+                                }}
+                              >
+                                {getTerminalDisplayName(term)}
+                              </span>
+                              {!term.name && <span style={styles.terminalPid}>:{term.pid}</span>}
+                            </>
+                          )}
 
                           {isHovered && (
                             <button
@@ -503,6 +541,18 @@ const styles: Record<string, React.CSSProperties> = {
   terminalNameActive: {
     color: '#00d4aa',
     fontWeight: 500,
+  },
+
+  terminalNameInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#e6edf3',
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 3,
+    padding: '1px 4px',
+    outline: 'none',
+    fontFamily: 'inherit',
   },
 
   terminalPid: {

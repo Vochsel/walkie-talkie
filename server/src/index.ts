@@ -31,6 +31,7 @@ class TerminalSession {
   private cols: number;
   private rows: number;
   private cwd: string;
+  private _name?: string;
   private scrollback = '';
   private listeners: { data: ((d: string) => void)[]; exit: ((code: number) => void)[] } = { data: [], exit: [] };
 
@@ -61,8 +62,10 @@ class TerminalSession {
   resize(c: number, r: number) { this.cols = c; this.rows = r; this.pty.resize(c, r); }
   kill() { this.pty.kill(); }
   getScrollback() { return this.scrollback; }
+  get name() { return this._name; }
+  setName(name: string) { this._name = name || undefined; }
   getInfo(): TerminalInfo {
-    return { id: this.id, pid: this.pty.pid, shell: this.shell, cols: this.cols, rows: this.rows, cwd: this.cwd, createdAt: this.createdAt };
+    return { id: this.id, pid: this.pty.pid, shell: this.shell, cols: this.cols, rows: this.rows, cwd: this.cwd, createdAt: this.createdAt, name: this._name };
   }
 }
 
@@ -253,6 +256,14 @@ export function createServer(port: number = DEFAULT_PORT, cwd?: string) {
         case 'terminal:input': terminals.get(msg.terminalId)?.write(msg.data); break;
         case 'terminal:resize': terminals.get(msg.terminalId)?.resize(msg.cols, msg.rows); break;
         case 'terminal:kill': { const s = terminals.get(msg.terminalId); if (s) { s.kill(); terminals.delete(msg.terminalId); } break; }
+        case 'terminal:rename': {
+          const s = terminals.get(msg.terminalId);
+          if (s) {
+            s.setName(msg.name);
+            send(ws, { type: 'terminal:renamed', terminalId: msg.terminalId, name: msg.name });
+          }
+          break;
+        }
         case 'terminal:list': {
           const sid = ws.sessionId!;
           const ids = sessionTerminals.get(sid) ?? new Set();

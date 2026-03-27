@@ -621,7 +621,7 @@ export default function RpgView({
           onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
           registerOutput={(handler) => registerOutputHandler(t.id, handler)}
           onClose={() => setOpenTerminalId(null)}
-          title={`Station [${t.id.slice(0, 8)}]`}
+          title={t.name || `Station [${t.id.slice(0, 8)}]`}
         />
       ))}
     </div>

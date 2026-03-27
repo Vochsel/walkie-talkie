@@ -11,6 +11,7 @@ export default function ClassicView({
   sendInput,
   resizeTerminal,
   killTerminal,
+  renameTerminal,
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
@@ -22,6 +23,7 @@ export default function ClassicView({
         onSelect={setActiveTerminalId}
         onClose={killTerminal}
         onCreate={() => createTerminal(80, 24)}
+        onRename={renameTerminal}
       />
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {terminals.map((term) => (

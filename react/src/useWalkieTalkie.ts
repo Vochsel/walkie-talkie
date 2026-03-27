@@ -70,6 +70,11 @@ export function useWalkieTalkie() {
           outputHandlersRef.current.delete(msg.terminalId);
           outputBuffersRef.current.delete(msg.terminalId);
           break;
+        case 'terminal:renamed':
+          setTerminals((prev) =>
+            prev.map((t) => t.id === msg.terminalId ? { ...t, name: msg.name } : t)
+          );
+          break;
         case 'terminal:list':
           setTerminals(msg.terminals);
           setIsResuming(false);
@@ -117,6 +122,10 @@ export function useWalkieTalkie() {
     clientRef.current?.send({ type: 'terminal:kill', terminalId });
   }, []);
 
+  const renameTerminal = useCallback((terminalId: string, name: string) => {
+    clientRef.current?.send({ type: 'terminal:rename', terminalId, name });
+  }, []);
+
   const listTerminals = useCallback(() => {
     clientRef.current?.send({ type: 'terminal:list' });
   }, []);
@@ -144,6 +153,7 @@ export function useWalkieTalkie() {
     sendInput,
     resizeTerminal,
     killTerminal,
+    renameTerminal,
     listTerminals,
     registerOutputHandler,
   };

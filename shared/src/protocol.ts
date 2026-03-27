@@ -8,6 +8,7 @@ export interface TerminalInfo {
   rows: number;
   cwd: string;
   createdAt: number;
+  name?: string;
 }
 
 // === Client -> Server Messages ===
@@ -51,6 +52,12 @@ export interface TerminalListMessage {
   type: 'terminal:list';
 }
 
+export interface TerminalRenameMessage {
+  type: 'terminal:rename';
+  terminalId: string;
+  name: string;
+}
+
 export type ClientMessage =
   | AuthMessage
   | AuthResumeMessage
@@ -58,7 +65,8 @@ export type ClientMessage =
   | TerminalResizeMessage
   | TerminalCreateMessage
   | TerminalKillMessage
-  | TerminalListMessage;
+  | TerminalListMessage
+  | TerminalRenameMessage;
 
 // === Server -> Client Messages ===
 
@@ -94,6 +102,12 @@ export interface TerminalListResponseMessage {
   terminals: TerminalInfo[];
 }
 
+export interface TerminalRenamedMessage {
+  type: 'terminal:renamed';
+  terminalId: string;
+  name: string;
+}
+
 export interface ErrorMessage {
   type: 'error';
   message: string;
@@ -107,4 +121,5 @@ export type ServerMessage =
   | TerminalCreatedMessage
   | TerminalExitedMessage
   | TerminalListResponseMessage
+  | TerminalRenamedMessage
   | ErrorMessage;

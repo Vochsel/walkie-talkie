@@ -24,6 +24,7 @@ export interface ViewProps {
   sendInput: ReturnType<typeof useWalkieTalkie>['sendInput'];
   resizeTerminal: ReturnType<typeof useWalkieTalkie>['resizeTerminal'];
   killTerminal: ReturnType<typeof useWalkieTalkie>['killTerminal'];
+  renameTerminal: ReturnType<typeof useWalkieTalkie>['renameTerminal'];
   createTerminal: ReturnType<typeof useWalkieTalkie>['createTerminal'];
   registerOutputHandler: ReturnType<typeof useWalkieTalkie>['registerOutputHandler'];
 }
@@ -41,6 +42,7 @@ function AppContent() {
     sendInput,
     resizeTerminal,
     killTerminal,
+    renameTerminal,
     registerOutputHandler,
   } = useWalkieTalkie();
 
@@ -146,6 +148,7 @@ function AppContent() {
     sendInput,
     resizeTerminal,
     killTerminal,
+    renameTerminal,
     createTerminal,
     registerOutputHandler,
   };

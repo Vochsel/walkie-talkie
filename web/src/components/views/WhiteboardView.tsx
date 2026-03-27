@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import type { TerminalInfo } from '@walkie-talkie/shared';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -31,6 +32,7 @@ export default function WhiteboardView({
   sendInput,
   resizeTerminal,
   killTerminal,
+  renameTerminal,
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
@@ -80,6 +82,22 @@ export default function WhiteboardView({
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const [addBtnHovered, setAddBtnHovered] = useState(false);
   const [layoutBtnHovered, setLayoutBtnHovered] = useState(false);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editNameValue, setEditNameValue] = useState('');
+
+  const getNodeDisplayName = (term: TerminalInfo) =>
+    term.name || term.shell.split('/').pop() || 'terminal';
+
+  const startEditingName = (term: TerminalInfo) => {
+    setEditingNameId(term.id);
+    setEditNameValue(getNodeDisplayName(term));
+  };
+
+  const commitName = (id: string) => {
+    const trimmed = editNameValue.trim();
+    if (trimmed) renameTerminal(id, trimmed);
+    setEditingNameId(null);
+  };
 
   // Assign layouts to new terminals
   useEffect(() => {
@@ -379,7 +397,7 @@ export default function WhiteboardView({
           const layout = nodeLayouts.get(term.id);
           if (!layout) return null;
           const isActive = term.id === activeTerminalId;
-          const shellName = term.shell.split('/').pop() || 'terminal';
+          const displayName = getNodeDisplayName(term);
 
           return (
             <div
@@ -422,10 +440,38 @@ export default function WhiteboardView({
                       background: isActive ? '#00d4aa' : '#484f58',
                     }}
                   />
-                  <span style={canvasStyles.titleText}>{shellName}</span>
-                  <span style={canvasStyles.titleId}>
-                    {term.id.slice(0, 8)}
-                  </span>
+                  {editingNameId === term.id ? (
+                    <input
+                      style={canvasStyles.titleInput}
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onBlur={() => commitName(term.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitName(term.id);
+                        if (e.key === 'Escape') setEditingNameId(null);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  ) : (
+                    <>
+                      <span
+                        style={canvasStyles.titleText}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          startEditingName(term);
+                        }}
+                      >
+                        {displayName}
+                      </span>
+                      {!term.name && (
+                        <span style={canvasStyles.titleId}>
+                          {term.id.slice(0, 8)}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={(e) => {
@@ -561,6 +607,18 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     color: '#e6edf3',
     fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
     whiteSpace: 'nowrap' as const,
+  },
+  titleInput: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#e6edf3',
+    fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 3,
+    padding: '1px 4px',
+    outline: 'none',
+    width: 120,
   },
   titleId: {
     fontSize: 10,

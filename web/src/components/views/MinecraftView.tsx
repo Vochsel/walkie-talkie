@@ -242,6 +242,7 @@ interface WorldDiff {
 
 class VoxelWorld {
   blocks = new Map<string, BlockType>();
+  doorStates: Map<string, boolean> = new Map();
   // Track original generated state for diffing
   private generated = new Set<string>();
   private userAdded = new Map<string, BlockType>();
@@ -291,7 +292,13 @@ class VoxelWorld {
   isSolid(x: number, y: number, z: number): boolean {
     const b = this.blocks.get(posKey(x, y, z));
     if (!b) return false;
-    if (b === 'glass' || b === 'torch' || b === 'door') return false;
+    if (b === 'torch') return false;
+    if (b === 'door') {
+      // Solid when closed, passable when open — check from bottom block
+      const bottomY = (this.blocks.get(posKey(x, y - 1, z)) === 'door') ? y - 1 : y;
+      const isOpen = this.doorStates.get(posKey(x, bottomY, z)) ?? false;
+      return !isOpen;
+    }
     return true;
   }
 
@@ -896,21 +903,24 @@ function createDoorModel(position: THREE.Vector3, isOpen: boolean, yaw: number):
   frameR.castShadow = true;
   group.add(frameR);
 
-  // Door panel (2 blocks tall)
+  // Door panel (2 blocks tall), pivots from left-edge hinge
   const panelGeo = new THREE.BoxGeometry(0.8, 1.9, 0.12);
   const panel = new THREE.Mesh(panelGeo, doorMat);
   panel.castShadow = true;
   panel.receiveShadow = true;
 
+  // Pivot group sits at the hinge (left edge of the panel)
+  const hinge = new THREE.Group();
+  hinge.position.set(-0.4, 0.5, 0);
+  // Offset panel so its left edge aligns with the hinge pivot
+  panel.position.set(0.4, 0, 0);
+  hinge.add(panel);
+
   if (isOpen) {
-    // Swing open 90° around left edge
-    panel.position.set(-0.05, 0.5, 0.34);
-    panel.rotation.y = -Math.PI / 2;
-  } else {
-    panel.position.set(0, 0.5, 0);
+    hinge.rotation.y = -Math.PI / 2;
   }
 
-  group.add(panel);
+  group.add(hinge);
   return group;
 }
 
@@ -1561,6 +1571,7 @@ export default function MinecraftView({
     const savedDiff = loadState<WorldDiff | null>('mc:worldDiff', null);
     if (savedDiff) world.applyDiff(savedDiff);
     worldRef.current = world;
+    world.doorStates = doorStatesRef.current;
 
     // Validate player position — push above terrain if stuck
     {
@@ -2468,7 +2479,7 @@ export default function MinecraftView({
             }
           })}
           onClose={closePopup}
-          title={`Terminal [${t.id.slice(0, 8)}]`}
+          title={t.name || `Terminal [${t.id.slice(0, 8)}]`}
         />
       ))}
     </div>
