@@ -1505,11 +1505,18 @@ export default function MinecraftView({
         const matrix = new THREE.Matrix4();
         hit.object.getMatrixAt(hit.instanceId, matrix);
         hitPos = new THREE.Vector3().setFromMatrixPosition(matrix);
-      } else if (hit.object.parent && hit.object.parent.userData.blockType) {
-        // Child of a CRT group — use the group's position
-        hitPos = hit.object.parent.position.clone();
       } else {
-        hitPos = hit.object.position.clone();
+        // Walk up parent chain to find the group with blockType (handles nested groups like wall torches)
+        let obj: THREE.Object3D | null = hit.object;
+        let groupPos: THREE.Vector3 | null = null;
+        while (obj) {
+          if (obj.userData.blockType) {
+            groupPos = obj.position.clone();
+            break;
+          }
+          obj = obj.parent;
+        }
+        hitPos = groupPos ?? hit.object.position.clone();
       }
 
       const bx = Math.round(hitPos.x), by = Math.round(hitPos.y), bz = Math.round(hitPos.z);
