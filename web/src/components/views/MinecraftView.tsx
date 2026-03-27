@@ -674,57 +674,72 @@ function resolveY(
   bodyH: number,
   eyeH: number,
 ): { y: number; grounded: boolean } {
-  const newY = pos.y + vel.y * dt;
-  const testPos = pos.clone();
-  testPos.y = newY;
+  const totalDy = vel.y * dt;
 
-  if (!isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
-    return { y: newY, grounded: false };
-  }
+  // Substep to prevent tunneling through thin floors/ceilings at high speeds
+  const maxStep = 0.9;
+  const numSteps = Math.max(1, Math.ceil(Math.abs(totalDy) / maxStep));
 
-  // Collision — find the resolved position
-  if (vel.y <= 0) {
-    // Falling: snap feet to top of the highest block below
-    const feetY = newY - eyeH;
-    const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
-    const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
-    let highestTop = -Infinity;
-    for (let bx = bx1; bx <= bx2; bx++) {
-      for (let bz = bz1; bz <= bz2; bz++) {
-        for (let by = Math.floor(feetY); by >= Math.floor(feetY) - 1; by--) {
-          if (world.isSolid(bx, by, bz)) {
-            highestTop = Math.max(highestTop, by + 1);
+  let currentY = pos.y;
+
+  for (let step = 0; step < numSteps; step++) {
+    const targetY = pos.y + totalDy * ((step + 1) / numSteps);
+    const testPos = pos.clone();
+    testPos.y = targetY;
+
+    if (!isPlayerColliding(world, testPos, hw, bodyH, eyeH)) {
+      currentY = targetY;
+      continue;
+    }
+
+    // Collision — find the resolved position
+    if (vel.y <= 0) {
+      // Falling: snap feet to top of the highest block below
+      const feetY = targetY - eyeH;
+      const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
+      const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+      let highestTop = -Infinity;
+      for (let bx = bx1; bx <= bx2; bx++) {
+        for (let bz = bz1; bz <= bz2; bz++) {
+          for (let by = Math.floor(feetY); by >= Math.floor(feetY) - 1; by--) {
+            if (world.isSolid(bx, by, bz)) {
+              highestTop = Math.max(highestTop, by + 1);
+            }
           }
         }
       }
-    }
-    if (highestTop > -Infinity) {
-      vel.y = 0;
-      return { y: highestTop + eyeH, grounded: true };
-    }
-  } else {
-    // Rising: snap head to bottom of the lowest block above
-    const headY = newY - eyeH + bodyH;
-    const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
-    const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
-    let lowestBottom = Infinity;
-    for (let bx = bx1; bx <= bx2; bx++) {
-      for (let bz = bz1; bz <= bz2; bz++) {
-        for (let by = Math.floor(headY); by <= Math.floor(headY) + 1; by++) {
-          if (world.isSolid(bx, by, bz)) {
-            lowestBottom = Math.min(lowestBottom, by);
+      if (highestTop > -Infinity) {
+        vel.y = 0;
+        return { y: highestTop + eyeH, grounded: true };
+      }
+    } else {
+      // Rising: snap head to bottom of the lowest block above
+      const headY = targetY - eyeH + bodyH;
+      const bx1 = Math.floor(pos.x - hw), bx2 = Math.floor(pos.x + hw);
+      const bz1 = Math.floor(pos.z - hw), bz2 = Math.floor(pos.z + hw);
+      let lowestBottom = Infinity;
+      for (let bx = bx1; bx <= bx2; bx++) {
+        for (let bz = bz1; bz <= bz2; bz++) {
+          for (let by = Math.floor(headY); by <= Math.floor(headY) + 1; by++) {
+            if (world.isSolid(bx, by, bz)) {
+              lowestBottom = Math.min(lowestBottom, by);
+            }
           }
         }
       }
+      if (lowestBottom < Infinity) {
+        vel.y = 0;
+        return { y: lowestBottom - bodyH + eyeH, grounded: false };
+      }
     }
-    if (lowestBottom < Infinity) {
-      vel.y = 0;
-      return { y: lowestBottom - bodyH + eyeH, grounded: false };
-    }
+
+    // Fallback: couldn't resolve, stay at last valid position
+    const wasFalling = vel.y <= 0;
+    vel.y = 0;
+    return { y: currentY, grounded: wasFalling };
   }
 
-  vel.y = 0;
-  return { y: pos.y, grounded: vel.y <= 0 };
+  return { y: currentY, grounded: false };
 }
 
 function resolveXZ(
@@ -763,6 +778,7 @@ export default function MinecraftView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
   const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
 
   // Refs for game state (avoid re-renders)
@@ -785,19 +801,13 @@ export default function MinecraftView({
   const { ref: playerPosArrRef } = usePersistedRef<[number, number, number]>('mc:pos', [WORLD_SIZE / 2, 20, WORLD_SIZE / 2]);
   // Convert persisted array to THREE.Vector3
   const playerPosRef = useRef(new THREE.Vector3(...playerPosArrRef.current));
-  // Keep array ref in sync for saving
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const p = playerPosRef.current;
-      playerPosArrRef.current = [p.x, p.y, p.z];
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [playerPosArrRef]);
 
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const onGroundRef = useRef(false);
   const sprintingRef = useRef(false);
   const crouchingRef = useRef(false);
+  const wasCrouchingRef = useRef(false);
+  const crouchCameraOffsetRef = useRef(0);
   const selectedSlotRef = useRef(0);
   const meshDirtyRef = useRef(false);
 
@@ -930,7 +940,11 @@ export default function MinecraftView({
 
     // ── Pointer lock ────────────────────────────────────────────────
     const canvas = renderer.domElement;
-    const onPointerLockChange = () => setIsLocked(document.pointerLockElement === canvas);
+    const onPointerLockChange = () => {
+      const locked = document.pointerLockElement === canvas;
+      setIsLocked(locked);
+      if (locked) setHasStarted(true);
+    };
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
     const requestLock = () => {
@@ -1108,12 +1122,20 @@ export default function MinecraftView({
           crouchingRef.current = true;
         } else if (wantsToSprint) {
           sprintingRef.current = true;
-          crouchingRef.current = false;
+          if (crouchingRef.current) {
+            // Check headroom before uncrouching for sprint
+            const testPos = pos.clone();
+            testPos.y += (PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT);
+            if (!isPlayerColliding(world, testPos, hw, PLAYER_BODY_HEIGHT, PLAYER_EYE_HEIGHT)) {
+              crouchingRef.current = false;
+            }
+          }
         } else {
           sprintingRef.current = false;
           // Uncrouch: only if there's room to stand up
           if (crouchingRef.current) {
             const testPos = pos.clone();
+            testPos.y += (PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT);
             if (!isPlayerColliding(world, testPos, hw, PLAYER_BODY_HEIGHT, PLAYER_EYE_HEIGHT)) {
               crouchingRef.current = false;
             }
@@ -1123,6 +1145,16 @@ export default function MinecraftView({
 
         const isCrouching = crouchingRef.current;
         const isSprinting = sprintingRef.current;
+
+        // Adjust pos.y on crouch state change to keep feet grounded
+        if (isCrouching && !wasCrouchingRef.current) {
+          pos.y -= (PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT);
+          crouchCameraOffsetRef.current = PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT;
+        } else if (!isCrouching && wasCrouchingRef.current) {
+          pos.y += (PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT);
+          crouchCameraOffsetRef.current = -(PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT);
+        }
+        wasCrouchingRef.current = isCrouching;
 
         const currentEyeH = isCrouching ? CROUCH_EYE_HEIGHT : PLAYER_EYE_HEIGHT;
         const currentBodyH = isCrouching ? CROUCH_BODY_HEIGHT : PLAYER_BODY_HEIGHT;
@@ -1199,13 +1231,16 @@ export default function MinecraftView({
         camera.updateProjectionMatrix();
       }
 
+      // Smooth crouch camera transition
+      crouchCameraOffsetRef.current += (0 - crouchCameraOffsetRef.current) * Math.min(1, 12 * dt);
+      if (Math.abs(crouchCameraOffsetRef.current) < 0.001) crouchCameraOffsetRef.current = 0;
+
+      // Sync position for persistence (usePersistedRef auto-saves every 2s)
+      playerPosArrRef.current = [playerPosRef.current.x, playerPosRef.current.y, playerPosRef.current.z];
+
       // Update camera
       camera.position.copy(playerPosRef.current);
-      // Smooth eye height for crouch transition
-      const targetEyeOffset = crouchingRef.current
-        ? PLAYER_EYE_HEIGHT - CROUCH_EYE_HEIGHT
-        : 0;
-      camera.position.y -= targetEyeOffset;
+      camera.position.y += crouchCameraOffsetRef.current;
       camera.quaternion.setFromEuler(new THREE.Euler(pitchRef.current, yawRef.current, 0, 'YXZ'));
 
       // Block highlight
@@ -1337,7 +1372,14 @@ export default function MinecraftView({
     syncTerminalMaps();
   }, [terminals, syncTerminalMaps]);
 
-  const closePopup = useCallback(() => setPopupTerminalId(null), []);
+  const closePopup = useCallback(() => {
+    setPopupTerminalId(null);
+    // Re-lock pointer to resume FPS controls immediately
+    const canvas = sceneObjsRef.current?.renderer.domElement;
+    if (canvas && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
+  }, []);
 
   return (
     <div style={styles.wrapper}>
@@ -1383,8 +1425,8 @@ export default function MinecraftView({
         </div>
       )}
 
-      {/* Instructions */}
-      {!isLocked && !popupTerminalId && (
+      {/* Instructions — only shown on first load */}
+      {!isLocked && !hasStarted && !popupTerminalId && (
         <div style={styles.instructions}>
           <div style={styles.instructionsBox}>
             <div style={styles.instructionsTitle}>Minecraft Terminal World</div>
