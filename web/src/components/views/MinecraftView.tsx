@@ -291,7 +291,7 @@ class VoxelWorld {
   isSolid(x: number, y: number, z: number): boolean {
     const b = this.blocks.get(posKey(x, y, z));
     if (!b) return false;
-    if (b === 'glass' || b === 'torch') return false;
+    if (b === 'glass' || b === 'torch' || b === 'door') return false;
     return true;
   }
 
@@ -655,8 +655,50 @@ function renderBlockPreviews(atlas: HTMLImageElement): Map<BlockType, string> {
   return previews;
 }
 
+// ── Terminal screen rendering ────────────────────────────────────────
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\r/g;
+function stripAnsi(s: string): string { return s.replace(ANSI_RE, ''); }
+
+interface TermScreen { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; lines: string[] }
+
+function renderTerminalScreen(canvas: HTMLCanvasElement, lines: string[], cursorOn: boolean) {
+  const ctx = canvas.getContext('2d')!;
+  const w = canvas.width, h = canvas.height;
+  // Dark background
+  ctx.fillStyle = '#0a1a15';
+  ctx.fillRect(0, 0, w, h);
+  // Scanline overlay
+  ctx.fillStyle = 'rgba(0,212,170,0.04)';
+  for (let y = 0; y < h; y += 2) ctx.fillRect(0, y, w, 1);
+  // Text
+  ctx.font = '9px monospace';
+  ctx.fillStyle = '#00d4aa';
+  const visibleLines = lines.slice(-6);
+  for (let i = 0; i < visibleLines.length; i++) {
+    ctx.fillText(visibleLines[i].slice(0, 24), 3, 11 + i * 10);
+  }
+  // Cursor
+  if (cursorOn) {
+    const lastLine = visibleLines[visibleLines.length - 1] ?? '';
+    const cx = 3 + Math.min(lastLine.length, 24) * 5.4;
+    const cy = Math.max(1, visibleLines.length - 1) * 10 + 2;
+    ctx.fillRect(cx, cy, 5, 8);
+  }
+}
+
+function createTermScreen(): TermScreen {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  renderTerminalScreen(canvas, ['$ ready'], true);
+  return { canvas, texture, lines: ['$ ready'] };
+}
+
 // ── Low-poly CRT computer model for terminal blocks ─────────────────
-function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
+function createCRTModel(position: THREE.Vector3, yaw = 0, screenTexture?: THREE.Texture): THREE.Group {
   const group = new THREE.Group();
   group.position.copy(position);
   group.rotation.y = yaw;
@@ -664,9 +706,9 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
 
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a2a3d });
   const darkMat = new THREE.MeshLambertMaterial({ color: 0x1e1e2e });
-  const screenMat = new THREE.MeshLambertMaterial({
-    color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.5,
-  });
+  const screenMat = screenTexture
+    ? new THREE.MeshBasicMaterial({ map: screenTexture, emissive: new THREE.Color(0x003322), emissiveIntensity: 0.2 } as THREE.MeshBasicMaterialParameters)
+    : new THREE.MeshLambertMaterial({ color: 0x00d4aa, emissive: 0x00d4aa, emissiveIntensity: 0.5 });
 
   // Offset so model sits on bottom of block bounding box (y = -0.5)
   const yOff = -0.16;
@@ -685,7 +727,7 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   bezel.position.set(0, 0.12 + yOff, 0.225);
   group.add(bezel);
 
-  // Screen (glowing terminal green)
+  // Screen (glowing terminal green or live texture)
   const screenGeo = new THREE.BoxGeometry(0.52, 0.3, 0.02);
   const screen = new THREE.Mesh(screenGeo, screenMat);
   screen.position.set(0, 0.12 + yOff, 0.235);
@@ -717,7 +759,7 @@ function createCRTModel(position: THREE.Vector3, yaw = 0): THREE.Group {
   return group;
 }
 
-// ── Door model ──────────────────────────────────────────────────────
+// ── Door model (2 blocks tall, positioned from bottom block) ────────
 function createDoorModel(position: THREE.Vector3, isOpen: boolean, yaw: number): THREE.Group {
   const group = new THREE.Group();
   group.position.copy(position);
@@ -727,34 +769,34 @@ function createDoorModel(position: THREE.Vector3, isOpen: boolean, yaw: number):
   const doorMat = new THREE.MeshLambertMaterial({ color: 0x8b6b4a });
   const frameMat = new THREE.MeshLambertMaterial({ color: 0x6b4226 });
 
-  // Door frame (always visible)
+  // Door frame spans 2 blocks, centered at y+0.5 (from y-0.5 to y+1.5)
   const frameTop = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.2), frameMat);
-  frameTop.position.set(0, 0.45, 0);
+  frameTop.position.set(0, 1.45, 0);
   frameTop.castShadow = true;
   group.add(frameTop);
 
-  const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.2), frameMat);
-  frameL.position.set(-0.45, 0, 0);
+  const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 0.2), frameMat);
+  frameL.position.set(-0.45, 0.5, 0);
   frameL.castShadow = true;
   group.add(frameL);
 
-  const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 0.2), frameMat);
-  frameR.position.set(0.45, 0, 0);
+  const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 0.2), frameMat);
+  frameR.position.set(0.45, 0.5, 0);
   frameR.castShadow = true;
   group.add(frameR);
 
-  // Door panel
-  const panelGeo = new THREE.BoxGeometry(0.8, 0.9, 0.12);
+  // Door panel (2 blocks tall)
+  const panelGeo = new THREE.BoxGeometry(0.8, 1.9, 0.12);
   const panel = new THREE.Mesh(panelGeo, doorMat);
   panel.castShadow = true;
   panel.receiveShadow = true;
 
   if (isOpen) {
     // Swing open 90° around left edge
-    panel.position.set(-0.05, 0, 0.34);
+    panel.position.set(-0.05, 0.5, 0.34);
     panel.rotation.y = -Math.PI / 2;
   } else {
-    panel.position.set(0, 0, 0);
+    panel.position.set(0, 0.5, 0);
   }
 
   group.add(panel);
@@ -896,6 +938,8 @@ function buildWorldMeshes(
   terminalRotations?: Map<string, number>,
   doorStates?: Map<string, boolean>,
   atlasTexture?: THREE.Texture,
+  termScreens?: Map<string, TermScreen>,
+  posToTerminal?: Map<string, string>,
 ): THREE.Object3D[] {
   const groups = world.grouped();
   const meshes: THREE.Object3D[] = [];
@@ -903,9 +947,11 @@ function buildWorldMeshes(
   for (const [type, positions] of groups) {
     if (positions.length === 0) continue;
 
-    // Door blocks use custom model
+    // Door blocks use custom model — only render from the bottom block
     if (type === 'door') {
       for (const pos of positions) {
+        // Skip upper half (the block below is also a door)
+        if (world.get(pos.x, pos.y - 1, pos.z) === 'door') continue;
         const key = posKey(pos.x, pos.y, pos.z);
         const isOpen = doorStates?.get(key) ?? false;
         const yaw = terminalRotations?.get(key) ?? 0;
@@ -950,7 +996,9 @@ function buildWorldMeshes(
       for (const pos of positions) {
         const key = posKey(pos.x, pos.y, pos.z);
         const yaw = terminalRotations?.get(key) ?? 0;
-        meshes.push(createCRTModel(pos, yaw));
+        const termId = posToTerminal?.get(key);
+        const screenTex = termId ? termScreens?.get(termId)?.texture : undefined;
+        meshes.push(createCRTModel(pos, yaw, screenTex));
       }
       continue;
     }
@@ -1000,7 +1048,17 @@ function isPlayerColliding(world: VoxelWorld, pos: THREE.Vector3, hw: number, bo
   for (let bx = Math.round(bb.minX); bx <= Math.round(bb.maxX); bx++) {
     for (let by = Math.round(bb.minY); by <= Math.round(bb.maxY); by++) {
       for (let bz = Math.round(bb.minZ); bz <= Math.round(bb.maxZ); bz++) {
-        if (world.isSolid(bx, by, bz) && overlapsBlock(bb.minX, bb.maxX, bb.minY, bb.maxY, bb.minZ, bb.maxZ, bx, by, bz)) {
+        if (!world.isSolid(bx, by, bz)) continue;
+        const bt = world.get(bx, by, bz);
+        if (bt === 'wood_stairs' || bt === 'cobblestone_stairs') {
+          // Stairs only collide in the bottom half (by-0.5 to by)
+          const stairTop = by;
+          if (bb.maxX > bx - 0.5 + EPSILON && bb.minX < bx + 0.5 - EPSILON &&
+              bb.maxY > by - 0.5 + EPSILON && bb.minY < stairTop - EPSILON &&
+              bb.maxZ > bz - 0.5 + EPSILON && bb.minZ < bz + 0.5 - EPSILON) {
+            return true;
+          }
+        } else if (overlapsBlock(bb.minX, bb.maxX, bb.minY, bb.maxY, bb.minZ, bb.maxZ, bx, by, bz)) {
           return true;
         }
       }
@@ -1062,7 +1120,9 @@ function resolveY(
         for (let bz = bz1; bz <= bz2; bz++) {
           for (let by = Math.round(feetY); by >= Math.round(feetY) - 1; by--) {
             if (world.isSolid(bx, by, bz)) {
-              highestTop = Math.max(highestTop, by + 0.5);
+              const bt = world.get(bx, by, bz);
+              const top = (bt === 'wood_stairs' || bt === 'cobblestone_stairs') ? by : by + 0.5;
+              highestTop = Math.max(highestTop, top);
             }
           }
         }
@@ -1154,6 +1214,10 @@ export default function MinecraftView({
   const inventoryOpenRef = useRef(false);
   const hotbarItemsRef = useRef<BlockType[]>(DEFAULT_HOTBAR);
   const [blockPreviews, setBlockPreviews] = useState<Map<BlockType, string>>(new Map());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsOpenRef = useRef(false);
+  const [termScreensEnabled, setTermScreensEnabled] = usePersistedState('mc:termScreens', true);
+  const termScreensRef = useRef<Map<string, TermScreen>>(new Map());
 
   // Refs for game state (avoid re-renders)
   const worldRef = useRef<VoxelWorld | null>(null);
@@ -1213,6 +1277,7 @@ export default function MinecraftView({
   useEffect(() => { selectedSlotRef.current = selectedSlot; }, [selectedSlot]);
   useEffect(() => { hotbarItemsRef.current = hotbarItems; }, [hotbarItems]);
   useEffect(() => { inventoryOpenRef.current = inventoryOpen; }, [inventoryOpen]);
+  useEffect(() => { settingsOpenRef.current = settingsOpen; }, [settingsOpen]);
 
   const rebuildMeshes = useCallback(() => {
     const s = sceneObjsRef.current;
@@ -1224,7 +1289,7 @@ export default function MinecraftView({
       if (m instanceof THREE.InstancedMesh) m.geometry.dispose();
     }
 
-    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries, terminalRotationsRef.current, doorStatesRef.current, s.atlasTexture);
+    s.worldMeshes = buildWorldMeshes(world, s.materials, s.geometries, terminalRotationsRef.current, doorStatesRef.current, s.atlasTexture, termScreensRef.current, posToTerminalRef.current);
     for (const m of s.worldMeshes) s.scene.add(m);
   }, []);
 
@@ -1404,7 +1469,7 @@ export default function MinecraftView({
 
     const geometries = createAllGeometries();
     const materials = createAllMaterials(texture);
-    const worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture);
+    const worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture, termScreensRef.current, posToTerminalRef.current);
     for (const m of worldMeshes) scene.add(m);
 
     // Block highlight wireframe
@@ -1465,9 +1530,17 @@ export default function MinecraftView({
           setInventoryOpen(true);
         }
       }
-      // Escape also closes inventory
-      if (k === 'escape' && inventoryOpenRef.current) {
-        setInventoryOpen(false);
+      // Escape: close inventory/settings, or open settings
+      if (k === 'escape') {
+        if (inventoryOpenRef.current) {
+          setInventoryOpen(false);
+        } else if (settingsOpenRef.current) {
+          setSettingsOpen(false);
+          canvas.requestPointerLock();
+        } else if (document.pointerLockElement === canvas) {
+          // ESC releases pointer lock (browser default) — show settings
+          setSettingsOpen(true);
+        }
       }
       // Q to reset hotbar to defaults
       if (k === 'q' && document.pointerLockElement === canvas) {
@@ -1559,7 +1632,16 @@ export default function MinecraftView({
           syncTerminalMaps();
         }
 
-        world.userDelete(blockPos.x, blockPos.y, blockPos.z);
+        // Breaking a door removes both halves
+        if (blockType === 'door') {
+          const bottomY = (world.get(blockPos.x, blockPos.y - 1, blockPos.z) === 'door') ? blockPos.y - 1 : blockPos.y;
+          world.userDelete(blockPos.x, bottomY, blockPos.z);
+          world.userDelete(blockPos.x, bottomY + 1, blockPos.z);
+          doorStatesRef.current.delete(posKey(blockPos.x, bottomY, blockPos.z));
+          doorStatesRef.current.delete(posKey(blockPos.x, bottomY + 1, blockPos.z));
+        } else {
+          world.userDelete(blockPos.x, blockPos.y, blockPos.z);
+        }
         highlightMesh.visible = false;
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
@@ -1568,11 +1650,14 @@ export default function MinecraftView({
         // Right click: PLACE block, open terminal, or toggle door
         const { blockPos, placePos, blockType, terminalId } = hit;
 
-        // If clicking a door, toggle open/close
+        // If clicking a door, toggle open/close (find bottom block)
         if (blockType === 'door') {
-          const key = posKey(blockPos.x, blockPos.y, blockPos.z);
-          const isOpen = doorStatesRef.current.get(key) ?? false;
-          doorStatesRef.current.set(key, !isOpen);
+          const bottomY = (world.get(blockPos.x, blockPos.y - 1, blockPos.z) === 'door') ? blockPos.y - 1 : blockPos.y;
+          const keyBottom = posKey(blockPos.x, bottomY, blockPos.z);
+          const keyTop = posKey(blockPos.x, bottomY + 1, blockPos.z);
+          const isOpen = doorStatesRef.current.get(keyBottom) ?? false;
+          doorStatesRef.current.set(keyBottom, !isOpen);
+          doorStatesRef.current.set(keyTop, !isOpen);
           meshDirtyRef.current = true;
           return;
         }
@@ -1600,7 +1685,15 @@ export default function MinecraftView({
         }
 
         const selectedBlock = hotbarItemsRef.current[selectedSlotRef.current];
-        world.userSet(placePos.x, placePos.y, placePos.z, selectedBlock);
+
+        // Doors need 2 blocks of vertical space
+        if (selectedBlock === 'door') {
+          if (world.has(placePos.x, placePos.y + 1, placePos.z)) return;
+          world.userSet(placePos.x, placePos.y, placePos.z, 'door');
+          world.userSet(placePos.x, placePos.y + 1, placePos.z, 'door');
+        } else {
+          world.userSet(placePos.x, placePos.y, placePos.z, selectedBlock);
+        }
         meshDirtyRef.current = true;
         saveState('mc:worldDiff', world.exportDiff());
 
@@ -1608,6 +1701,9 @@ export default function MinecraftView({
         if (selectedBlock === 'door' || selectedBlock === 'wood_stairs' || selectedBlock === 'cobblestone_stairs' || selectedBlock === 'glass_pane') {
           const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
           terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
+          if (selectedBlock === 'door') {
+            terminalRotationsRef.current.set(posKey(placePos.x, placePos.y + 1, placePos.z), snapped);
+          }
         }
 
         // Wall torch: tilt if placed on a side face
@@ -1817,14 +1913,14 @@ export default function MinecraftView({
             });
           }
         }
-        state.worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture);
+        state.worldMeshes = buildWorldMeshes(world, materials, geometries, terminalRotationsRef.current, doorStatesRef.current, texture, termScreensRef.current, posToTerminalRef.current);
         for (const m of state.worldMeshes) scene.add(m);
         meshDirtyRef.current = false;
         lastMeshRebuild = time;
       }
 
       // ── Day/night cycle ──────────────────────────────────────────────
-      const dayTime = (time % DAY_CYCLE_LENGTH) / DAY_CYCLE_LENGTH; // 0→1
+      const dayTime = ((time + DAY_CYCLE_LENGTH * 0.25) % DAY_CYCLE_LENGTH) / DAY_CYCLE_LENGTH; // 0→1, offset so t=0 is morning
       const sunAngle = dayTime * Math.PI * 2 - Math.PI / 2;
       const sunY = Math.sin(sunAngle);
       const sunX = Math.cos(sunAngle);
@@ -1878,6 +1974,13 @@ export default function MinecraftView({
       // Clouds drift
       cloudTex.offset.x += dt * 0.004;
       cloudTex.offset.x %= 1;
+
+      // Terminal screen cursor blink (2x/sec)
+      const cursorOn = Math.floor(time * 2) % 2 === 0;
+      for (const [, screen] of termScreensRef.current) {
+        renderTerminalScreen(screen.canvas, screen.lines, cursorOn);
+        screen.texture.needsUpdate = true;
+      }
 
       // Sunrise/sunset gradient ring
       const sunsetIntensity = (sunHeight > 0.05 && sunHeight < 0.35)
@@ -1937,6 +2040,14 @@ export default function MinecraftView({
           meshDirtyRef.current = true;
         }
         terminalPositionsRef.current.delete(id);
+        termScreensRef.current.delete(id);
+      }
+    }
+
+    // Create terminal screens for new terminals
+    for (const t of terminals) {
+      if (termScreensEnabled && !termScreensRef.current.has(t.id)) {
+        termScreensRef.current.set(t.id, createTermScreen());
       }
     }
 
@@ -2117,6 +2228,40 @@ export default function MinecraftView({
         </div>
       )}
 
+      {/* Settings menu — shown when ESC pressed while playing */}
+      {settingsOpen && (
+        <div style={styles.inventoryOverlay} onClick={() => {
+          setSettingsOpen(false);
+          sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+        }}>
+          <div style={styles.settingsPanel} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.inventoryTitle}>Settings</div>
+            <label style={styles.settingsRow}>
+              <span style={styles.settingsLabel}>Terminal Screen Rendering</span>
+              <input
+                type="checkbox"
+                checked={termScreensEnabled}
+                onChange={(e) => {
+                  setTermScreensEnabled(e.target.checked);
+                  if (!e.target.checked) {
+                    termScreensRef.current.clear();
+                  } else {
+                    for (const t of terminals) {
+                      if (!termScreensRef.current.has(t.id)) {
+                        termScreensRef.current.set(t.id, createTermScreen());
+                      }
+                    }
+                  }
+                  meshDirtyRef.current = true;
+                }}
+                style={styles.settingsCheckbox}
+              />
+            </label>
+            <div style={styles.settingsHint}>Shows live terminal output on CRT screens in the world</div>
+          </div>
+        </div>
+      )}
+
       {/* Terminal popups — kept mounted so xterm state persists */}
       {terminals.map((t) => (
         <TerminalPopup
@@ -2125,7 +2270,18 @@ export default function MinecraftView({
           visible={popupTerminalId === t.id}
           onInput={(data) => sendInput(t.id, data)}
           onResize={(cols, rows) => resizeTerminal(t.id, cols, rows)}
-          registerOutput={(handler) => registerOutputHandler(t.id, handler)}
+          registerOutput={(handler) => registerOutputHandler(t.id, (data) => {
+            handler(data);
+            if (termScreensRef.current.has(t.id)) {
+              const screen = termScreensRef.current.get(t.id)!;
+              const clean = stripAnsi(data);
+              const newLines = clean.split('\n').filter(l => l.length > 0);
+              screen.lines.push(...newLines);
+              if (screen.lines.length > 20) screen.lines = screen.lines.slice(-20);
+              renderTerminalScreen(screen.canvas, screen.lines, true);
+              screen.texture.needsUpdate = true;
+            }
+          })}
           onClose={closePopup}
           title={`Terminal [${t.id.slice(0, 8)}]`}
         />
@@ -2143,13 +2299,13 @@ const styles: Record<string, React.CSSProperties> = {
   crosshairV: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 2, height: 22, background: 'rgba(255,255,255,0.85)', borderRadius: 1, boxShadow: '0 0 3px rgba(0,0,0,0.6)' },
   // MC-style hotbar: 9 square slots
   hotbar: {
-    position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
-    display: 'flex', gap: 2, padding: 2,
-    background: 'rgba(0,0,0,0.72)', borderRadius: 2, border: '2px solid rgba(100,100,100,0.6)',
+    position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
+    display: 'flex', gap: 3, padding: 3,
+    background: 'rgba(0,0,0,0.72)', borderRadius: 3, border: '3px solid rgba(100,100,100,0.6)',
     imageRendering: 'pixelated' as const,
   },
   hotbarSlot: {
-    width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center',
     border: '2px solid rgba(80,80,80,0.5)', background: 'rgba(60,60,60,0.4)',
     cursor: 'pointer', position: 'relative' as const,
   },
@@ -2157,11 +2313,11 @@ const styles: Record<string, React.CSSProperties> = {
     border: '2px solid #fff', background: 'rgba(255,255,255,0.15)',
   },
   hotbarBlock: {
-    width: 32, height: 32, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
+    width: 44, height: 44, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
     imageRendering: 'pixelated' as const,
   },
   hotbarKey: {
-    position: 'absolute' as const, top: 1, left: 3, fontSize: 9, color: 'rgba(255,255,255,0.5)',
+    position: 'absolute' as const, top: 2, left: 4, fontSize: 11, color: 'rgba(255,255,255,0.5)',
     fontFamily: "'SF Mono', monospace", fontWeight: 700, textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
   },
   // Inventory overlay
@@ -2171,21 +2327,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   inventoryPanel: {
     background: 'rgba(50,50,50,0.92)', border: '3px solid rgba(100,100,100,0.7)',
-    borderRadius: 4, padding: '16px 20px', display: 'flex',
-    flexDirection: 'column' as const, gap: 10, maxWidth: 480, width: '100%',
+    borderRadius: 4, padding: '20px 24px', display: 'flex',
+    flexDirection: 'column' as const, gap: 12, maxWidth: 640, width: '100%',
     boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
   },
   inventoryTitle: {
-    fontSize: 16, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace",
+    fontSize: 18, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace",
     textAlign: 'center' as const, letterSpacing: 1,
   },
   inventoryGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 3,
-    maxHeight: 300, overflowY: 'auto' as const, padding: 4,
+    display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 4,
+    maxHeight: 400, overflowY: 'auto' as const, padding: 6,
     background: 'rgba(0,0,0,0.3)', borderRadius: 2,
   },
   inventorySlot: {
-    width: 44, height: 44, display: 'flex', flexDirection: 'column' as const,
+    width: 58, height: 58, display: 'flex', flexDirection: 'column' as const,
     alignItems: 'center', justifyContent: 'center',
     border: '1px solid rgba(80,80,80,0.6)', background: 'rgba(60,60,60,0.3)',
     cursor: 'pointer', borderRadius: 2, transition: 'background 0.1s',
@@ -2194,25 +2350,25 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #fff', background: 'rgba(255,255,255,0.15)',
   },
   inventoryBlock: {
-    width: 28, height: 28, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
+    width: 36, height: 36, borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)',
   },
   inventoryLabel: {
-    fontSize: 6, color: '#aaa', marginTop: 1, fontFamily: "'SF Mono', monospace",
+    fontSize: 7, color: '#aaa', marginTop: 2, fontFamily: "'SF Mono', monospace",
     textTransform: 'uppercase' as const, letterSpacing: 0.2, textAlign: 'center' as const,
-    overflow: 'hidden' as const, whiteSpace: 'nowrap' as const, maxWidth: 42,
+    overflow: 'hidden' as const, whiteSpace: 'nowrap' as const, maxWidth: 56,
   },
   inventoryHotbar: {
     display: 'flex', flexDirection: 'column' as const, gap: 4, marginTop: 4,
     borderTop: '1px solid rgba(100,100,100,0.5)', paddingTop: 8,
   },
   inventoryHotbarLabel: {
-    fontSize: 11, color: '#888', fontFamily: "'SF Mono', monospace", textAlign: 'center' as const,
+    fontSize: 12, color: '#888', fontFamily: "'SF Mono', monospace", textAlign: 'center' as const,
   },
   inventoryHotbarRow: {
-    display: 'flex', gap: 3, justifyContent: 'center',
+    display: 'flex', gap: 4, justifyContent: 'center',
   },
   inventoryHotbarSlot: {
-    width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 58, height: 58, display: 'flex', alignItems: 'center', justifyContent: 'center',
     border: '2px solid rgba(80,80,80,0.5)', background: 'rgba(60,60,60,0.4)',
     cursor: 'pointer', borderRadius: 2,
   },
@@ -2234,4 +2390,24 @@ const styles: Record<string, React.CSSProperties> = {
   instructionsKeys: { display: 'flex', flexDirection: 'column' as const, gap: 6, fontSize: 13, color: '#c9d1d9', marginTop: 8 },
   hud: { position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10, pointerEvents: 'none' },
   hudText: { background: 'rgba(13,17,23,0.7)', color: '#8b949e', fontSize: 12, padding: '4px 14px', borderRadius: 6, fontFamily: "'SF Mono', monospace" },
+  settingsPanel: {
+    background: 'rgba(50,50,50,0.92)', border: '3px solid rgba(100,100,100,0.7)',
+    borderRadius: 4, padding: '20px 28px', display: 'flex',
+    flexDirection: 'column' as const, gap: 12, minWidth: 300,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+  },
+  settingsRow: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '8px 0', cursor: 'pointer',
+  },
+  settingsLabel: {
+    fontSize: 14, color: '#ddd', fontFamily: "'SF Mono', monospace",
+  },
+  settingsCheckbox: {
+    width: 18, height: 18, cursor: 'pointer', accentColor: '#00d4aa',
+  },
+  settingsHint: {
+    fontSize: 11, color: '#888', fontFamily: "'SF Mono', monospace",
+    marginTop: -8,
+  },
 };
