@@ -38,6 +38,8 @@ export default function TerminalPopup({
       fontSize: 13,
       fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
       lineHeight: 1.2,
+      scrollback: 1000,
+      overviewRulerWidth: 0,
       theme: {
         background: '#0d1117',
         foreground: '#e6edf3',

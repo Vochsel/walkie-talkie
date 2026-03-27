@@ -37,3 +37,11 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Hide xterm scrollbar */
+.xterm-viewport::-webkit-scrollbar {
+  display: none;
+}
+.xterm-viewport {
+  scrollbar-width: none;
+}

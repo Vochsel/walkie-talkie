@@ -2180,11 +2180,14 @@ export default function MinecraftView({
     }
 
     // Create terminal screens for new terminals
+    let screensCreated = false;
     for (const t of terminals) {
       if (termScreensEnabled && !termScreensRef.current.has(t.id)) {
         termScreensRef.current.set(t.id, createTermScreen());
+        screensCreated = true;
       }
     }
+    if (screensCreated) meshDirtyRef.current = true;
 
     // Place blocks for new terminals
     for (const t of terminals) {
