@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- body -->
+  <rect x="8" y="10" width="16" height="18" rx="3" fill="#26251e"/>
+  <!-- antenna -->
+  <rect x="11" y="4" width="3" height="8" rx="1.5" fill="#26251e"/>
+  <!-- speaker grille -->
+  <line x1="12" y1="16" x2="20" y2="16" stroke="#f7f7f4" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="12" y1="19.5" x2="20" y2="19.5" stroke="#f7f7f4" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="12" y1="23" x2="20" y2="23" stroke="#f7f7f4" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- signal waves -->
+  <path d="M22 7.5c1.5 1 2.5 2.8 2.5 5" stroke="#26251e" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  <path d="M22 4c3 1.5 5 5 5 9" stroke="#26251e" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+</svg>
