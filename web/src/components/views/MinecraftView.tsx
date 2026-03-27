@@ -1341,12 +1341,14 @@ export default function MinecraftView({
   sendInput,
   resizeTerminal,
   killTerminal,
+  renameTerminal,
   createTerminal,
   registerOutputHandler,
 }: ViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
   const [pendingBreak, setPendingBreak] = useState<{ blockPos: THREE.Vector3; terminalId: string } | null>(null);
+  const pendingBreakRef = useRef(false);
   const [isLocked, setIsLocked] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
@@ -1421,6 +1423,7 @@ export default function MinecraftView({
   useEffect(() => { inventoryOpenRef.current = inventoryOpen; }, [inventoryOpen]);
   useEffect(() => { settingsOpenRef.current = settingsOpen; }, [settingsOpen]);
   useEffect(() => { popupTerminalIdRef.current = popupTerminalId; }, [popupTerminalId]);
+  useEffect(() => { pendingBreakRef.current = pendingBreak !== null; }, [pendingBreak]);
 
   const rebuildMeshes = useCallback(() => {
     const s = sceneObjsRef.current;
@@ -1637,7 +1640,7 @@ export default function MinecraftView({
       if (locked) {
         setHasStarted(true);
         setSettingsOpen(false);
-      } else if (!inventoryOpenRef.current && !popupTerminalIdRef.current) {
+      } else if (!inventoryOpenRef.current && !popupTerminalIdRef.current && !pendingBreakRef.current) {
         // Pointer lock lost (ESC) — show settings if nothing else is open
         setSettingsOpen(true);
       }
@@ -2479,6 +2482,7 @@ export default function MinecraftView({
             }
           })}
           onClose={closePopup}
+          onRename={(name) => renameTerminal(t.id, name)}
           title={t.name || `Terminal [${t.id.slice(0, 8)}]`}
         />
       ))}
