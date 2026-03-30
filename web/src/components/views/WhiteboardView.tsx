@@ -86,6 +86,8 @@ export default function WhiteboardView({
   const [layoutBtnHovered, setLayoutBtnHovered] = useState(false);
   const [themeBtnHovered, setThemeBtnHovered] = useState(false);
   const { theme, preference, cycleTheme } = useTheme();
+  const [interactionMode, setInteractionMode] = usePersistedState<'design' | 'map'>('whiteboard:mode', 'map');
+  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
 
@@ -362,11 +364,15 @@ export default function WhiteboardView({
     [zoom]
   );
 
-  // Canvas mouse down — start panning (any click on background, middle-click, or space+click)
+  // Canvas mouse down — start panning
+  // Map mode: any left/middle click on background pans
+  // Design mode: only middle-click or space+left-click pans; bare left-click deselects
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Left click on canvas background, middle click, or space+left click
-      if (e.button === 1 || e.button === 0) {
+      const canPan =
+        e.button === 1 ||
+        (e.button === 0 && (interactionMode === 'map' || spaceHeld));
+      if (canPan) {
         e.preventDefault();
         panMovedRef.current = false;
         setPanning({
@@ -375,9 +381,12 @@ export default function WhiteboardView({
           startPanX: pan.x,
           startPanY: pan.y,
         });
+      } else if (e.button === 0 && interactionMode === 'design') {
+        // Bare left-click on background in design mode → deselect
+        setActiveTerminalId(null);
       }
     },
-    [pan]
+    [pan, interactionMode, spaceHeld, setActiveTerminalId]
   );
 
   // Node titlebar drag start
@@ -428,10 +437,26 @@ export default function WhiteboardView({
   );
 
   // Determine cursor
-  let cursor = 'default';
-  if (panning || (spaceHeld && !dragging && !resizing)) cursor = panning ? 'grabbing' : 'grab';
+  let cursor = interactionMode === 'map' ? 'grab' : 'default';
+  if (spaceHeld && !dragging && !resizing) cursor = 'grab';
+  if (panning) cursor = 'grabbing';
   if (dragging) cursor = 'grabbing';
   if (resizing) cursor = 'nwse-resize';
+
+  // Zoom step (centered on viewport)
+  const zoomBy = useCallback((factor: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+    const scale = newZoom / zoom;
+    setPan((prev) => ({
+      x: cx - scale * (cx - prev.x),
+      y: cy - scale * (cy - prev.y),
+    }));
+    setZoom(newZoom);
+  }, [zoom, setPan, setZoom]);
 
   // Build the dot-grid background pattern that moves with pan/zoom
   const bgSize = DOT_SPACING * zoom;
@@ -665,6 +690,57 @@ export default function WhiteboardView({
         </button>
       </div>
 
+      {/* React Flow-style controls panel */}
+      <div style={canvasStyles.controlsPanel}>
+        {([
+          { id: 'zoom-in', title: 'Zoom in', onClick: () => zoomBy(1.25), icon: (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="7" y1="3" x2="7" y2="11" /><line x1="3" y1="7" x2="11" y2="7" />
+            </svg>
+          )},
+          { id: 'zoom-out', title: 'Zoom out', onClick: () => zoomBy(0.8), icon: (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="7" x2="11" y2="7" />
+            </svg>
+          )},
+          { id: 'fit-view', title: 'Fit view (F)', onClick: focusOrFitAll, icon: (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1,5 1,1 5,1" /><polyline points="9,1 13,1 13,5" />
+              <polyline points="13,9 13,13 9,13" /><polyline points="5,13 1,13 1,9" />
+            </svg>
+          )},
+          { id: 'mode', title: interactionMode === 'map' ? 'Map mode (click to switch to design)' : 'Design mode (click to switch to map)', onClick: () => setInteractionMode(interactionMode === 'map' ? 'design' : 'map'), icon: interactionMode === 'map' ? (
+            // Hand icon for map mode
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 13.5c-3 0-4.5-2-4.5-4.5V5.5a1 1 0 0 1 2 0V8" />
+              <path d="M5.5 4V2.5a1 1 0 0 1 2 0V7" />
+              <path d="M7.5 3.5V2a1 1 0 0 1 2 0v5" />
+              <path d="M9.5 4.5V3a1 1 0 0 1 2 0v6c0 2.5-1.5 4.5-4.5 4.5" />
+            </svg>
+          ) : (
+            // Pointer/cursor icon for design mode
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+              <path d="M3 1.5l9 6.5H7.5L5.8 13.4 3 1.5z" />
+            </svg>
+          )},
+        ] as const).map((btn) => (
+          <button
+            key={btn.id}
+            onClick={btn.onClick}
+            onMouseEnter={() => setHoveredControl(btn.id)}
+            onMouseLeave={() => setHoveredControl(null)}
+            title={btn.title}
+            style={{
+              ...canvasStyles.controlButton,
+              background: hoveredControl === btn.id ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: hoveredControl === btn.id ? 'var(--bg-primary)' : 'var(--text-secondary)',
+            }}
+          >
+            {btn.icon}
+          </button>
+        ))}
+      </div>
+
       {/* Zoom indicator */}
       <div style={canvasStyles.zoomIndicator}>
         {Math.round(zoom * 100)}%
@@ -783,6 +859,31 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     transition: 'all 0.15s ease',
     boxShadow: '0 4px 12px rgba(var(--shadow),0.15)',
     lineHeight: 1,
+  },
+  controlsPanel: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+    background: 'var(--bg-secondary)',
+    boxShadow: '0 4px 12px rgba(var(--shadow),0.15)',
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  controlButton: {
+    width: 32,
+    height: 32,
+    border: 'none',
+    borderBottom: '1px solid var(--border)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.12s ease, color 0.12s ease',
+    padding: 0,
   },
   zoomIndicator: {
     position: 'absolute',
