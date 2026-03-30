@@ -99,6 +99,21 @@ export function TerminalView({
       onResize(term.cols, term.rows);
     });
 
+    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.type !== 'keydown') return true;
+      // Shift+Enter: send newline instead of carriage return (for multiline input in claude/codex)
+      if (event.key === 'Enter' && event.shiftKey) {
+        onInput('\n');
+        return false;
+      }
+      // Cmd+Backspace: send Ctrl+U (kill to beginning of line)
+      if (event.key === 'Backspace' && event.metaKey) {
+        onInput('\x15');
+        return false;
+      }
+      return true;
+    });
+
     term.onData((data) => {
       onInput(data);
     });

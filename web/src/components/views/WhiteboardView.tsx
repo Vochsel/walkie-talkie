@@ -5,6 +5,7 @@ import type { TerminalInfo } from '@walkie-talkie/shared';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useTheme } from '@/hooks/useTheme';
 
 interface NodeLayout {
   x: number;
@@ -82,6 +83,8 @@ export default function WhiteboardView({
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const [addBtnHovered, setAddBtnHovered] = useState(false);
   const [layoutBtnHovered, setLayoutBtnHovered] = useState(false);
+  const [themeBtnHovered, setThemeBtnHovered] = useState(false);
+  const { theme, preference, cycleTheme } = useTheme();
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
 
@@ -375,7 +378,7 @@ export default function WhiteboardView({
       style={{
         ...canvasStyles.container,
         cursor,
-        backgroundImage: `radial-gradient(circle, #30363d ${dotSize}px, transparent ${dotSize}px)`,
+        backgroundImage: `radial-gradient(circle, var(--border) ${dotSize}px, transparent ${dotSize}px)`,
         backgroundSize: `${bgSize}px ${bgSize}px`,
         backgroundPosition: `${bgPosX}px ${bgPosY}px`,
       }}
@@ -411,11 +414,11 @@ export default function WhiteboardView({
                 width: layout.width,
                 height: layout.height,
                 borderRadius: 10,
-                border: `2px solid ${isActive ? '#00d4aa' : '#30363d'}`,
+                border: `2px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
                 boxShadow: isActive
-                  ? '0 0 0 1px #00d4aa40, 0 8px 32px rgba(0,0,0,0.5)'
-                  : '0 4px 20px rgba(0,0,0,0.4)',
-                background: '#0d1117',
+                  ? `0 0 0 1px var(--accent-dim), 0 8px 32px rgba(var(--shadow),0.3)`
+                  : `0 4px 20px rgba(var(--shadow),0.15)`,
+                background: 'var(--bg-primary)',
                 display: 'flex',
                 flexDirection: 'column' as const,
                 overflow: 'hidden',
@@ -430,14 +433,14 @@ export default function WhiteboardView({
                 onMouseDown={(e) => handleNodeDragStart(term.id, e)}
                 style={{
                   ...canvasStyles.titlebar,
-                  borderBottom: `1px solid ${isActive ? '#00d4aa30' : '#21262d'}`,
+                  borderBottom: `1px solid ${isActive ? 'var(--accent-dim)' : 'var(--border-subtle)'}`,
                 }}
               >
                 <div style={canvasStyles.titleLeft}>
                   <div
                     style={{
                       ...canvasStyles.titleDot,
-                      background: isActive ? '#00d4aa' : '#484f58',
+                      background: isActive ? 'var(--accent)' : 'var(--text-muted)',
                     }}
                   />
                   {editingNameId === term.id ? (
@@ -482,8 +485,8 @@ export default function WhiteboardView({
                   onMouseLeave={() => setHoveredClose(null)}
                   style={{
                     ...canvasStyles.closeBtn,
-                    background: hoveredClose === term.id ? '#da363430' : 'transparent',
-                    color: hoveredClose === term.id ? '#f85149' : '#6e7681',
+                    background: hoveredClose === term.id ? 'var(--danger-dim)' : 'transparent',
+                    color: hoveredClose === term.id ? 'var(--danger)' : 'var(--text-secondary)',
                   }}
                 >
                   {'\u2715'}
@@ -512,7 +515,7 @@ export default function WhiteboardView({
                 <svg width="12" height="12" viewBox="0 0 12 12" style={{ display: 'block' }}>
                   <path
                     d="M10 2L2 10M10 6L6 10M10 10L10 10"
-                    stroke="#484f58"
+                    stroke="var(--text-muted)"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                   />
@@ -531,9 +534,9 @@ export default function WhiteboardView({
           onMouseLeave={() => setLayoutBtnHovered(false)}
           style={{
             ...canvasStyles.toolbarButton,
-            background: layoutBtnHovered ? '#00d4aa' : '#1c2128',
-            color: layoutBtnHovered ? '#0d1117' : '#00d4aa',
-            borderColor: layoutBtnHovered ? '#00d4aa' : '#30363d',
+            background: layoutBtnHovered ? 'var(--accent)' : 'var(--bg-tertiary)',
+            color: layoutBtnHovered ? 'var(--bg-primary)' : 'var(--accent)',
+            borderColor: layoutBtnHovered ? 'var(--accent)' : 'var(--border)',
             transform: layoutBtnHovered ? 'scale(1.05)' : 'scale(1)',
           }}
           title="Auto layout (\u2318\u21E7L)"
@@ -551,14 +554,45 @@ export default function WhiteboardView({
           onMouseLeave={() => setAddBtnHovered(false)}
           style={{
             ...canvasStyles.toolbarButton,
-            background: addBtnHovered ? '#00d4aa' : '#1c2128',
-            color: addBtnHovered ? '#0d1117' : '#00d4aa',
-            borderColor: addBtnHovered ? '#00d4aa' : '#30363d',
+            background: addBtnHovered ? 'var(--accent)' : 'var(--bg-tertiary)',
+            color: addBtnHovered ? 'var(--bg-primary)' : 'var(--accent)',
+            borderColor: addBtnHovered ? 'var(--accent)' : 'var(--border)',
             transform: addBtnHovered ? 'scale(1.05)' : 'scale(1)',
           }}
           title="New terminal"
         >
           +
+        </button>
+        <button
+          onClick={cycleTheme}
+          onMouseEnter={() => setThemeBtnHovered(true)}
+          onMouseLeave={() => setThemeBtnHovered(false)}
+          style={{
+            ...canvasStyles.toolbarButton,
+            background: themeBtnHovered ? 'var(--accent)' : 'var(--bg-tertiary)',
+            color: themeBtnHovered ? 'var(--bg-primary)' : 'var(--accent)',
+            borderColor: themeBtnHovered ? 'var(--accent)' : 'var(--border)',
+            transform: themeBtnHovered ? 'scale(1.05)' : 'scale(1)',
+          }}
+          title={`Theme: ${preference} (${theme})`}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            {theme === 'light' ? (
+              <>
+                <circle cx="8" cy="8" r="3" />
+                <line x1="8" y1="1" x2="8" y2="3" />
+                <line x1="8" y1="13" x2="8" y2="15" />
+                <line x1="1" y1="8" x2="3" y2="8" />
+                <line x1="13" y1="8" x2="15" y2="8" />
+                <line x1="3.05" y1="3.05" x2="4.46" y2="4.46" />
+                <line x1="11.54" y1="11.54" x2="12.95" y2="12.95" />
+                <line x1="3.05" y1="12.95" x2="4.46" y2="11.54" />
+                <line x1="11.54" y1="4.46" x2="12.95" y2="3.05" />
+              </>
+            ) : (
+              <path d="M13.5 8A5.5 5.5 0 0 1 8 13.5 5.5 5.5 0 0 1 2.5 8 5.5 5.5 0 0 1 8 2.5c0 3.04 2.46 5.5 5.5 5.5Z" />
+            )}
+          </svg>
         </button>
       </div>
 
@@ -576,7 +610,7 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     width: '100%',
     height: '100%',
     overflow: 'hidden',
-    background: '#0d1117',
+    background: 'var(--bg-primary)',
   },
   titlebar: {
     display: 'flex',
@@ -585,7 +619,7 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     height: TITLEBAR_HEIGHT,
     minHeight: TITLEBAR_HEIGHT,
     padding: '0 10px',
-    background: '#161b22',
+    background: 'var(--bg-secondary)',
     cursor: 'grab',
     userSelect: 'none' as const,
   },
@@ -604,17 +638,17 @@ const canvasStyles: Record<string, React.CSSProperties> = {
   titleText: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
     whiteSpace: 'nowrap' as const,
   },
   titleInput: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 3,
     padding: '1px 4px',
     outline: 'none',
@@ -622,7 +656,7 @@ const canvasStyles: Record<string, React.CSSProperties> = {
   },
   titleId: {
     fontSize: 10,
-    color: '#484f58',
+    color: 'var(--text-muted)',
     fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
     whiteSpace: 'nowrap' as const,
   },
@@ -678,7 +712,7 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'all 0.15s ease',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+    boxShadow: '0 4px 12px rgba(var(--shadow),0.15)',
     lineHeight: 1,
   },
   zoomIndicator: {
@@ -687,9 +721,9 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     right: 16,
     padding: '4px 10px',
     borderRadius: 6,
-    background: '#161b2280',
-    border: '1px solid #30363d',
-    color: '#6e7681',
+    background: 'var(--overlay-bg)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
     fontSize: 11,
     fontFamily: "'SF Mono', 'Fira Code', Menlo, monospace",
     zIndex: 10,

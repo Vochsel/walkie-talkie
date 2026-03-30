@@ -105,6 +105,17 @@ function AppContent() {
     }
   }, [terminals, activeTerminalId]);
 
+  // Update Chrome tab title with active terminal name
+  useEffect(() => {
+    const active = terminals.find((t) => t.id === activeTerminalId);
+    if (active) {
+      const name = active.name || `${active.shell.split('/').pop()}`;
+      document.title = `${name} | Walkie-Talkie`;
+    } else {
+      document.title = 'Walkie-Talkie';
+    }
+  }, [activeTerminalId, terminals]);
+
   useEffect(() => {
     if (connectionState === 'error') {
       setConnectError(
