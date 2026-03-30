@@ -78,6 +78,7 @@ export default function WhiteboardView({
   } | null>(null);
 
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const panMovedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const nodeCountRef = useRef(0);
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
@@ -172,21 +173,34 @@ export default function WhiteboardView({
     }
   }, [terminals, setNodeLayouts, setPan, setZoom]);
 
-  // Focus on active node with F key
-  const focusActiveNode = useCallback(() => {
-    if (!activeTerminalId || !containerRef.current) return;
-    const layout = nodeLayouts.get(activeTerminalId);
-    if (!layout) return;
+  // Fit view to show all terminal nodes
+  const fitAll = useCallback(() => {
+    if (terminals.length === 0 || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const targetZoom = 1;
-    const cx = layout.x + layout.width / 2;
-    const cy = layout.y + layout.height / 2;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const term of terminals) {
+      const layout = nodeLayouts.get(term.id);
+      if (!layout) continue;
+      minX = Math.min(minX, layout.x);
+      minY = Math.min(minY, layout.y);
+      maxX = Math.max(maxX, layout.x + layout.width);
+      maxY = Math.max(maxY, layout.y + layout.height);
+    }
+    if (!isFinite(minX)) return;
+    const padding = 60;
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const fitZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM,
+      Math.min((rect.width - padding * 2) / contentW, (rect.height - padding * 2) / contentH)
+    ));
+    const cx = minX + contentW / 2;
+    const cy = minY + contentH / 2;
     setPan({
-      x: rect.width / 2 - cx * targetZoom,
-      y: rect.height / 2 - cy * targetZoom,
+      x: rect.width / 2 - cx * fitZoom,
+      y: rect.height / 2 - cy * fitZoom,
     });
-    setZoom(targetZoom);
-  }, [activeTerminalId, nodeLayouts, setPan, setZoom]);
+    setZoom(fitZoom);
+  }, [terminals, nodeLayouts, setPan, setZoom]);
 
   // Space key tracking for pan mode + F to focus
   useEffect(() => {
@@ -200,7 +214,7 @@ export default function WhiteboardView({
       }
       if (e.code === 'KeyF' && !e.repeat) {
         e.preventDefault();
-        focusActiveNode();
+        fitAll();
       }
       if (e.code === 'KeyL' && (e.metaKey || e.ctrlKey) && e.shiftKey && !e.repeat) {
         e.preventDefault();
@@ -218,11 +232,12 @@ export default function WhiteboardView({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [focusActiveNode, autoLayout]);
+  }, [fitAll, autoLayout]);
 
   // Global mouse move/up for dragging, resizing, panning
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      if (panning) panMovedRef.current = true;
       if (dragging) {
         const dx = (e.clientX - dragging.startMouseX) / zoom;
         const dy = (e.clientY - dragging.startMouseY) / zoom;
@@ -256,6 +271,10 @@ export default function WhiteboardView({
     };
 
     const handleMouseUp = () => {
+      // If we were panning but didn't move, treat as a background click → deselect
+      if (panning && !panMovedRef.current) {
+        setActiveTerminalId(null);
+      }
       setDragging(null);
       setResizing(null);
       setPanning(null);
@@ -267,7 +286,7 @@ export default function WhiteboardView({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, resizing, panning, zoom]);
+  }, [dragging, resizing, panning, zoom, setActiveTerminalId]);
 
   // Zoom with scroll wheel
   const handleWheel = useCallback(
@@ -300,6 +319,7 @@ export default function WhiteboardView({
       // Left click on canvas background, middle click, or space+left click
       if (e.button === 1 || e.button === 0) {
         e.preventDefault();
+        panMovedRef.current = false;
         setPanning({
           startMouseX: e.clientX,
           startMouseY: e.clientY,
