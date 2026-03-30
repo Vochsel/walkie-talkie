@@ -173,10 +173,55 @@ export default function WhiteboardView({
     }
   }, [terminals, setNodeLayouts, setPan, setZoom]);
 
-  // Fit view to show all terminal nodes
-  const fitAll = useCallback(() => {
-    if (terminals.length === 0 || !containerRef.current) return;
+  // Animated pan/zoom transition
+  const animRef = useRef<number | null>(null);
+  const animateTo = useCallback((targetPan: { x: number; y: number }, targetZoom: number) => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    const startPan = { ...pan };
+    const startZoom = zoom;
+    const duration = 300;
+    const startTime = performance.now();
+    const ease = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const e = ease(t);
+      setPan({
+        x: startPan.x + (targetPan.x - startPan.x) * e,
+        y: startPan.y + (targetPan.y - startPan.y) * e,
+      });
+      setZoom(startZoom + (targetZoom - startZoom) * e);
+      if (t < 1) {
+        animRef.current = requestAnimationFrame(step);
+      } else {
+        animRef.current = null;
+      }
+    };
+    animRef.current = requestAnimationFrame(step);
+  }, [pan, zoom, setPan, setZoom]);
+
+  // Focus on active node or fit all
+  const focusOrFitAll = useCallback(() => {
+    if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+
+    if (activeTerminalId) {
+      const layout = nodeLayouts.get(activeTerminalId);
+      if (!layout) return;
+      const padding = 80;
+      const fitZoom = Math.min(1, Math.max(MIN_ZOOM,
+        Math.min((rect.width - padding * 2) / layout.width, (rect.height - padding * 2) / layout.height)
+      ));
+      const cx = layout.x + layout.width / 2;
+      const cy = layout.y + layout.height / 2;
+      animateTo(
+        { x: rect.width / 2 - cx * fitZoom, y: rect.height / 2 - cy * fitZoom },
+        fitZoom,
+      );
+      return;
+    }
+
+    // No selection — fit all
+    if (terminals.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const term of terminals) {
       const layout = nodeLayouts.get(term.id);
@@ -195,12 +240,11 @@ export default function WhiteboardView({
     ));
     const cx = minX + contentW / 2;
     const cy = minY + contentH / 2;
-    setPan({
-      x: rect.width / 2 - cx * fitZoom,
-      y: rect.height / 2 - cy * fitZoom,
-    });
-    setZoom(fitZoom);
-  }, [terminals, nodeLayouts, setPan, setZoom]);
+    animateTo(
+      { x: rect.width / 2 - cx * fitZoom, y: rect.height / 2 - cy * fitZoom },
+      fitZoom,
+    );
+  }, [activeTerminalId, terminals, nodeLayouts, animateTo]);
 
   // Space key tracking for pan mode + F to focus
   useEffect(() => {
@@ -214,7 +258,7 @@ export default function WhiteboardView({
       }
       if (e.code === 'KeyF' && !e.repeat) {
         e.preventDefault();
-        fitAll();
+        focusOrFitAll();
       }
       if (e.code === 'KeyL' && (e.metaKey || e.ctrlKey) && e.shiftKey && !e.repeat) {
         e.preventDefault();
@@ -232,7 +276,12 @@ export default function WhiteboardView({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [fitAll, autoLayout]);
+  }, [focusOrFitAll, autoLayout]);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, []);
 
   // Global mouse move/up for dragging, resizing, panning
   useEffect(() => {
