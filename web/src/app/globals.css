@@ -61,6 +61,11 @@ button {
   outline-offset: 2px;
 }
 
+/* Context menu item hover */
+.ctx-menu-item:hover {
+  background: var(--accent-dim);
+}
+
 /* Hide xterm scrollbar */
 .xterm-viewport::-webkit-scrollbar {
   display: none;

@@ -374,8 +374,8 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 260,
     maxWidth: 260,
     height: '100%',
-    backgroundColor: '#161b22',
-    borderRight: '1px solid #30363d',
+    backgroundColor: 'var(--bg-secondary)',
+    borderRight: '1px solid var(--border)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -386,13 +386,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '16px 16px 12px 16px',
-    borderBottom: '1px solid #21262d',
+    borderBottom: '1px solid var(--border-subtle)',
   },
 
   sidebarTitle: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     letterSpacing: '0.02em',
     textTransform: 'uppercase' as const,
   },
@@ -404,9 +404,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     background: 'transparent',
-    border: '1px solid #30363d',
+    border: '1px solid var(--border)',
     borderRadius: 6,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontSize: 18,
     cursor: 'pointer',
     transition: 'all 0.15s ease',
@@ -433,7 +433,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   groupHeaderDropTarget: {
-    backgroundColor: 'rgba(0, 212, 170, 0.08)',
+    backgroundColor: 'var(--accent-dim)',
   },
 
   chevronBtn: {
@@ -449,14 +449,14 @@ const styles: Record<string, React.CSSProperties> = {
   chevron: {
     display: 'inline-block',
     fontSize: 10,
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     transition: 'transform 0.2s ease',
   },
 
   groupName: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     flex: 1,
     cursor: 'default',
     userSelect: 'none' as const,
@@ -466,10 +466,10 @@ const styles: Record<string, React.CSSProperties> = {
   groupNameInput: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     flex: 1,
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 4,
     padding: '2px 6px',
     outline: 'none',
@@ -477,7 +477,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   groupCount: {
     fontSize: 11,
-    color: '#484f58',
+    color: 'var(--text-muted)',
     minWidth: 16,
     textAlign: 'center' as const,
   },
@@ -485,7 +485,7 @@ const styles: Record<string, React.CSSProperties> = {
   removeGroupBtn: {
     background: 'none',
     border: 'none',
-    color: '#484f58',
+    color: 'var(--text-muted)',
     fontSize: 16,
     cursor: 'pointer',
     padding: '0 2px',
@@ -510,13 +510,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   terminalItemActive: {
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    borderLeft: '2px solid #00d4aa',
+    backgroundColor: 'var(--accent-dim)',
+    borderLeft: '2px solid var(--accent)',
     paddingLeft: 26,
   },
 
   terminalItemHover: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(128, 128, 128, 0.08)',
   },
 
   terminalItemDragging: {
@@ -525,13 +525,13 @@ const styles: Record<string, React.CSSProperties> = {
 
   terminalIcon: {
     fontSize: 8,
-    color: '#484f58',
+    color: 'var(--text-muted)',
     lineHeight: 1,
   },
 
   terminalName: {
     fontSize: 13,
-    color: '#b1bac4',
+    color: 'var(--text-secondary)',
     flex: 1,
     overflow: 'hidden' as const,
     textOverflow: 'ellipsis' as const,
@@ -539,16 +539,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   terminalNameActive: {
-    color: '#00d4aa',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
 
   terminalNameInput: {
     flex: 1,
     fontSize: 13,
-    color: '#e6edf3',
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 3,
     padding: '1px 4px',
     outline: 'none',
@@ -557,7 +557,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   terminalPid: {
     fontSize: 11,
-    color: '#484f58',
+    color: 'var(--text-muted)',
     fontFamily: 'monospace',
   },
 
@@ -568,7 +568,7 @@ const styles: Record<string, React.CSSProperties> = {
     transform: 'translateY(-50%)',
     background: 'none',
     border: 'none',
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     fontSize: 16,
     cursor: 'pointer',
     padding: '0 4px',
@@ -579,16 +579,16 @@ const styles: Record<string, React.CSSProperties> = {
   // Sidebar footer
   sidebarFooter: {
     padding: '12px 16px',
-    borderTop: '1px solid #21262d',
+    borderTop: '1px solid var(--border-subtle)',
   },
 
   addGroupBtn: {
     width: '100%',
     padding: '6px 12px',
     background: 'transparent',
-    border: '1px dashed #30363d',
+    border: '1px dashed var(--border)',
     borderRadius: 6,
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     fontSize: 12,
     cursor: 'pointer',
     transition: 'all 0.15s ease',
@@ -600,7 +600,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     overflow: 'hidden',
     position: 'relative' as const,
-    backgroundColor: '#0d1117',
+    backgroundColor: 'var(--bg-primary)',
   },
 
   // Empty state
@@ -610,33 +610,33 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     gap: 12,
   },
 
   emptyIcon: {
     fontSize: 32,
-    color: '#30363d',
+    color: 'var(--border)',
     marginBottom: 8,
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: 500,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     margin: 0,
   },
 
   emptySubtitle: {
     fontSize: 13,
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     margin: 0,
   },
 
   createBtn: {
     marginTop: 8,
-    background: '#00d4aa',
-    color: '#0d1117',
+    background: 'var(--accent)',
+    color: 'var(--bg-primary)',
     border: 'none',
     borderRadius: 6,
     padding: '8px 20px',

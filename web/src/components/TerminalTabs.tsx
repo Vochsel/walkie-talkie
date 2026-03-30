@@ -100,8 +100,8 @@ export default function TerminalTabs({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    background: '#161b22',
-    borderBottom: '1px solid #30363d',
+    background: 'var(--bg-secondary)',
+    borderBottom: '1px solid var(--border)',
     padding: '0',
     display: 'flex',
     alignItems: 'stretch',
@@ -121,26 +121,26 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 6,
     padding: '0 12px',
     cursor: 'pointer',
-    borderRight: '1px solid #30363d',
-    color: '#8b949e',
+    borderRight: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
     fontSize: 13,
     userSelect: 'none' as const,
     transition: 'background 0.15s',
   },
   activeTab: {
-    background: '#0d1117',
-    color: '#e6edf3',
-    borderBottom: '2px solid #00d4aa',
+    background: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
+    borderBottom: '2px solid var(--accent)',
   },
   tabLabel: {
     whiteSpace: 'nowrap' as const,
     fontFamily: "'SF Mono', monospace",
   },
   tabInput: {
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 3,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontSize: 13,
     fontFamily: "'SF Mono', monospace",
     padding: '1px 4px',
@@ -150,7 +150,7 @@ const styles: Record<string, React.CSSProperties> = {
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#484f58',
+    color: 'var(--text-muted)',
     cursor: 'pointer',
     fontSize: 16,
     padding: '0 2px',
@@ -159,7 +159,7 @@ const styles: Record<string, React.CSSProperties> = {
   newBtn: {
     background: 'none',
     border: 'none',
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: 18,
     padding: '0 14px',

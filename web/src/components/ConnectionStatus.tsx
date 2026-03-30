@@ -8,12 +8,12 @@ interface ConnectionStatusProps {
 }
 
 const STATUS_CONFIG: Record<ConnectionState, { color: string; label: string }> = {
-  disconnected: { color: '#484f58', label: 'Disconnected' },
-  connecting: { color: '#d29922', label: 'Connecting...' },
-  authenticating: { color: '#d29922', label: 'Authenticating...' },
+  disconnected: { color: 'var(--text-muted)', label: 'Disconnected' },
+  connecting: { color: 'var(--warning)', label: 'Connecting...' },
+  authenticating: { color: 'var(--warning)', label: 'Authenticating...' },
   connected: { color: '#3fb950', label: 'Connected' },
-  reconnecting: { color: '#d29922', label: 'Reconnecting...' },
-  error: { color: '#f85149', label: 'Error' },
+  reconnecting: { color: 'var(--warning)', label: 'Reconnecting...' },
+  error: { color: 'var(--danger)', label: 'Error' },
 };
 
 export default function ConnectionStatus({ state, onDisconnect }: ConnectionStatusProps) {
@@ -48,8 +48,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '6px 12px',
-    background: '#161b22',
-    borderTop: '1px solid #30363d',
+    background: 'var(--bg-secondary)',
+    borderTop: '1px solid var(--border)',
     height: 32,
     flexShrink: 0,
   },
@@ -69,8 +69,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   disconnectBtn: {
     background: 'none',
-    border: '1px solid #30363d',
-    color: '#8b949e',
+    border: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: 11,
     padding: '2px 8px',

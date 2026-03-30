@@ -91,6 +91,15 @@ export default function WhiteboardView({
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    terminalId: string | null; // null = canvas background
+    canvasX: number; // position in canvas coordinates for placing new terminals
+    canvasY: number;
+  } | null>(null);
+
   const getNodeDisplayName = (term: TerminalInfo) =>
     term.name || term.shell.split('/').pop() || 'terminal';
 
@@ -104,6 +113,99 @@ export default function WhiteboardView({
     if (trimmed) renameTerminal(id, trimmed);
     setEditingNameId(null);
   };
+
+  // Screen coords → canvas coords
+  const screenToCanvas = useCallback((screenX: number, screenY: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: (screenX - rect.left - pan.x) / zoom,
+      y: (screenY - rect.top - pan.y) / zoom,
+    };
+  }, [pan, zoom]);
+
+  // Right-click on canvas background
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const canvasPos = screenToCanvas(e.clientX, e.clientY);
+    setContextMenu({ x: e.clientX, y: e.clientY, terminalId: null, canvasX: canvasPos.x, canvasY: canvasPos.y });
+  }, [screenToCanvas]);
+
+  // Right-click on a node
+  const handleNodeContextMenu = useCallback((terminalId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const canvasPos = screenToCanvas(e.clientX, e.clientY);
+    setActiveTerminalId(terminalId);
+    setContextMenu({ x: e.clientX, y: e.clientY, terminalId, canvasX: canvasPos.x, canvasY: canvasPos.y });
+  }, [screenToCanvas, setActiveTerminalId]);
+
+  // Close context menu on any click or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('wheel', close, { passive: true });
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('wheel', close);
+    };
+  }, [contextMenu]);
+
+  // Context menu actions
+  const ctxNewTerminal = useCallback(() => {
+    if (!contextMenu) return;
+    createTerminal(80, 24);
+    // The new terminal will get a default layout from the useEffect, but we want to place it at the click position.
+    // We'll update it after it appears via a ref.
+    const pos = { x: contextMenu.canvasX, y: contextMenu.canvasY };
+    // Wait for the terminal to be created and its layout assigned, then override the position
+    setTimeout(() => {
+      setNodeLayouts((prev) => {
+        const next = new Map(prev);
+        // Find the newest terminal (last entry)
+        const entries = [...next.entries()];
+        if (entries.length === 0) return prev;
+        const [lastId, lastLayout] = entries[entries.length - 1];
+        next.set(lastId, { ...lastLayout, x: pos.x, y: pos.y });
+        return next;
+      });
+    }, 50);
+    setContextMenu(null);
+  }, [contextMenu, createTerminal, setNodeLayouts]);
+
+  const ctxRename = useCallback(() => {
+    if (!contextMenu?.terminalId) return;
+    const term = terminals.find((t) => t.id === contextMenu.terminalId);
+    if (term) startEditingName(term);
+    setContextMenu(null);
+  }, [contextMenu, terminals]);
+
+  const ctxDuplicate = useCallback(() => {
+    if (!contextMenu?.terminalId) return;
+    const layout = nodeLayouts.get(contextMenu.terminalId);
+    createTerminal(80, 24);
+    if (layout) {
+      const pos = { x: layout.x + 40, y: layout.y + 40 };
+      setTimeout(() => {
+        setNodeLayouts((prev) => {
+          const next = new Map(prev);
+          const entries = [...next.entries()];
+          if (entries.length === 0) return prev;
+          const [lastId, lastLayout] = entries[entries.length - 1];
+          next.set(lastId, { ...lastLayout, x: pos.x, y: pos.y, width: layout.width, height: layout.height });
+          return next;
+        });
+      }, 50);
+    }
+    setContextMenu(null);
+  }, [contextMenu, nodeLayouts, createTerminal, setNodeLayouts]);
+
+  const ctxDelete = useCallback(() => {
+    if (!contextMenu?.terminalId) return;
+    killTerminal(contextMenu.terminalId);
+    setContextMenu(null);
+  }, [contextMenu, killTerminal]);
 
   // Assign layouts to new terminals
   useEffect(() => {
@@ -469,6 +571,7 @@ export default function WhiteboardView({
       ref={containerRef}
       onWheel={handleWheel}
       onMouseDown={handleCanvasMouseDown}
+      onContextMenu={handleCanvasContextMenu}
       style={{
         ...canvasStyles.container,
         cursor,
@@ -501,6 +604,7 @@ export default function WhiteboardView({
               key={term.id}
               className="nowheel"
               onClick={(e) => handleNodeClick(term.id, e)}
+              onContextMenu={(e) => handleNodeContextMenu(term.id, e)}
               style={{
                 position: 'absolute',
                 left: layout.x,
@@ -745,6 +849,37 @@ export default function WhiteboardView({
       <div style={canvasStyles.zoomIndicator}>
         {Math.round(zoom * 100)}%
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          style={{
+            ...canvasStyles.contextMenu,
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {contextMenu.terminalId ? (
+            <>
+              <button className="ctx-menu-item" style={canvasStyles.contextMenuItem} onMouseDown={ctxRename}>
+                Rename
+              </button>
+              <button className="ctx-menu-item" style={canvasStyles.contextMenuItem} onMouseDown={ctxDuplicate}>
+                Duplicate
+              </button>
+              <div style={canvasStyles.contextMenuDivider} />
+              <button className="ctx-menu-item" style={{ ...canvasStyles.contextMenuItem, color: 'var(--danger)' }} onMouseDown={ctxDelete}>
+                Delete
+              </button>
+            </>
+          ) : (
+            <button className="ctx-menu-item" style={canvasStyles.contextMenuItem} onMouseDown={ctxNewTerminal}>
+              New Terminal
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -899,5 +1034,32 @@ const canvasStyles: Record<string, React.CSSProperties> = {
     zIndex: 10,
     userSelect: 'none' as const,
     pointerEvents: 'none' as const,
+  },
+  contextMenu: {
+    position: 'fixed' as const,
+    zIndex: 1000,
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '4px 0',
+    boxShadow: '0 8px 24px rgba(var(--shadow),0.25)',
+    minWidth: 160,
+  },
+  contextMenuItem: {
+    display: 'block',
+    width: '100%',
+    padding: '7px 14px',
+    border: 'none',
+    background: 'none',
+    color: 'var(--text-primary)',
+    fontSize: 13,
+    textAlign: 'left' as const,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  contextMenuDivider: {
+    height: 1,
+    background: 'var(--border)',
+    margin: '4px 0',
   },
 };

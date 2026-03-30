@@ -10,6 +10,7 @@ import ConnectionStatus from '@/components/ConnectionStatus';
 import ViewSwitcher, { ViewType } from '@/components/ViewSwitcher';
 import { getSavedConnections } from '@/lib/storage';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useTheme } from '@/hooks/useTheme';
 
 const ClassicView = dynamic(() => import('@/components/views/ClassicView'), { ssr: false });
 const SidebarView = dynamic(() => import('@/components/views/SidebarView'), { ssr: false });
@@ -50,6 +51,7 @@ function AppContent() {
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [currentView, setCurrentView] = usePersistedState<ViewType>('view', 'classic');
+  useTheme(); // Apply data-theme attribute globally so CSS variables work in all views
 
   const autoResumedRef = useRef(false);
 
@@ -219,14 +221,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
   loadingText: {
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     fontSize: 14,
   },
   spinner: {
     width: 32,
     height: 32,
-    border: '3px solid #30363d',
-    borderTopColor: '#00d4aa',
+    border: '3px solid var(--border)',
+    borderTopColor: 'var(--accent)',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
   },

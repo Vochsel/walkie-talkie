@@ -4,7 +4,7 @@ export type { TerminalOutputHandler } from './useWalkieTalkie';
 export { usePersistedState, usePersistedRef } from './usePersistedState';
 
 // Components
-export { TerminalView, defaultTheme } from './TerminalView';
+export { TerminalView, defaultTheme, lightTheme } from './TerminalView';
 export type { TerminalViewProps, TerminalTheme } from './TerminalView';
 
 // Re-export client & shared for convenience
