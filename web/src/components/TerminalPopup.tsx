@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { defaultTheme, lightTheme } from '@walkie-talkie/react';
+import { useTheme } from '@/hooks/useTheme';
 
 interface TerminalPopupProps {
   terminalId: string;
@@ -33,6 +35,8 @@ export default function TerminalPopup({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const { theme: appTheme } = useTheme();
+  const termTheme = appTheme === 'light' ? lightTheme : defaultTheme;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -44,29 +48,7 @@ export default function TerminalPopup({
       lineHeight: 1.2,
       scrollback: 1000,
       overviewRulerWidth: 0,
-      theme: {
-        background: '#0d1117',
-        foreground: '#e6edf3',
-        cursor: '#00d4aa',
-        cursorAccent: '#0d1117',
-        selectionBackground: '#264f78',
-        black: '#484f58',
-        red: '#ff7b72',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#bc8cff',
-        cyan: '#39c5cf',
-        white: '#b1bac4',
-        brightBlack: '#6e7681',
-        brightRed: '#ffa198',
-        brightGreen: '#56d364',
-        brightYellow: '#e3b341',
-        brightBlue: '#79c0ff',
-        brightMagenta: '#d2a8ff',
-        brightCyan: '#56d4dd',
-        brightWhite: '#f0f6fc',
-      },
+      theme: termTheme,
     });
 
     const fitAddon = new FitAddon();
@@ -80,9 +62,9 @@ export default function TerminalPopup({
 
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type !== 'keydown') return true;
-      // Shift+Enter: send newline instead of carriage return (for multiline input in claude/codex)
+      // Shift+Enter: insert literal newline via quoted-insert (Ctrl-V + LF)
       if (event.key === 'Enter' && event.shiftKey) {
-        onInput('\n');
+        onInput('\x16\x0a');
         return false;
       }
       // Cmd+Backspace: send Ctrl+U (kill to beginning of line)
@@ -120,6 +102,13 @@ export default function TerminalPopup({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
+
+  // Update theme dynamically
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = termTheme;
+    }
+  }, [termTheme]);
 
   // Re-fit and focus when becoming visible
   useEffect(() => {
@@ -198,8 +187,8 @@ const popupStyles: Record<string, React.CSSProperties> = {
     height: '60vh',
     maxWidth: 900,
     maxHeight: 600,
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 10,
     overflow: 'hidden',
     display: 'flex',
@@ -211,24 +200,24 @@ const popupStyles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '8px 14px',
-    background: '#161b22',
-    borderBottom: '1px solid #30363d',
+    background: 'var(--bg-secondary)',
+    borderBottom: '1px solid var(--border)',
     flexShrink: 0,
   },
   title: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontFamily: "'SF Mono', monospace",
     cursor: 'default',
   },
   titleInput: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#e6edf3',
+    color: 'var(--text-primary)',
     fontFamily: "'SF Mono', monospace",
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: 3,
     padding: '2px 6px',
     outline: 'none',
@@ -237,7 +226,7 @@ const popupStyles: Record<string, React.CSSProperties> = {
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#8b949e',
+    color: 'var(--text-secondary)',
     fontSize: 20,
     cursor: 'pointer',
     lineHeight: 1,

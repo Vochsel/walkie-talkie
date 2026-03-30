@@ -50,6 +50,30 @@ export const defaultTheme: TerminalTheme = {
   brightWhite: '#f0f6fc',
 };
 
+export const lightTheme: TerminalTheme = {
+  background: '#ffffff',
+  foreground: '#1f2328',
+  cursor: '#00a884',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#0969da33',
+  black: '#24292f',
+  red: '#cf222e',
+  green: '#116329',
+  yellow: '#4d2d00',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#6e7781',
+  brightBlack: '#57606a',
+  brightRed: '#a40e26',
+  brightGreen: '#1a7f37',
+  brightYellow: '#633c01',
+  brightBlue: '#218bff',
+  brightMagenta: '#a475f9',
+  brightCyan: '#3192aa',
+  brightWhite: '#8c959f',
+};
+
 export interface TerminalViewProps {
   terminalId: string;
   isActive: boolean;
@@ -101,9 +125,9 @@ export function TerminalView({
 
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type !== 'keydown') return true;
-      // Shift+Enter: send newline instead of carriage return (for multiline input in claude/codex)
+      // Shift+Enter: insert literal newline via quoted-insert (Ctrl-V + LF)
       if (event.key === 'Enter' && event.shiftKey) {
-        onInput('\n');
+        onInput('\x16\x0a');
         return false;
       }
       // Cmd+Backspace: send Ctrl+U (kill to beginning of line)
@@ -140,6 +164,13 @@ export function TerminalView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
+
+  // Update xterm theme dynamically when prop changes
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = theme;
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (isActive && termRef.current) {
