@@ -702,6 +702,7 @@ export default function WhiteboardView({
                   onInput={(data) => sendInput(term.id, data)}
                   onResize={(cols, rows) => resizeTerminal(term.id, cols, rows)}
                   registerOutput={(handler) => registerOutputHandler(term.id, handler)}
+                  containerScale={zoom}
                 />
               </div>
 

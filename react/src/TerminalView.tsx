@@ -85,6 +85,10 @@ export interface TerminalViewProps {
   lineHeight?: number;
   cursorBlink?: boolean;
   theme?: TerminalTheme;
+  /** When the terminal is inside a CSS-transformed container (e.g. whiteboard
+   *  zoom), pass the ancestor scale factor so xterm's mouse coordinate mapping
+   *  stays accurate. A counter-transform is applied internally. */
+  containerScale?: number;
 }
 
 export function TerminalView({
@@ -98,6 +102,7 @@ export function TerminalView({
   lineHeight = 1.2,
   cursorBlink = true,
   theme = defaultTheme,
+  containerScale = 1,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -151,10 +156,15 @@ export function TerminalView({
       });
     });
 
+    let resizeTimer: ReturnType<typeof setTimeout>;
     const observer = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         fitAddon.fit();
-        onResize(term.cols, term.rows);
+        // Debounce server resize notification (rapid during zoom/drag)
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          onResize(term.cols, term.rows);
+        }, 150);
       });
     });
     observer.observe(containerRef.current);
@@ -163,6 +173,7 @@ export function TerminalView({
     fitAddonRef.current = fitAddon;
 
     return () => {
+      clearTimeout(resizeTimer);
       unregister();
       observer.disconnect();
       term.dispose();
@@ -185,14 +196,24 @@ export function TerminalView({
     }
   }, [isActive]);
 
+  const scaled = containerScale !== 1;
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        display: isActive ? 'block' : 'none',
-      }}
-    />
+    <div style={{
+      width: '100%',
+      height: '100%',
+      overflow: 'hidden',
+      display: isActive ? 'block' : 'none',
+    }}>
+      <div
+        ref={containerRef}
+        style={{
+          width: scaled ? `${containerScale * 100}%` : '100%',
+          height: scaled ? `${containerScale * 100}%` : '100%',
+          transform: scaled ? `scale(${1 / containerScale})` : undefined,
+          transformOrigin: '0 0',
+        }}
+      />
+    </div>
   );
 }
