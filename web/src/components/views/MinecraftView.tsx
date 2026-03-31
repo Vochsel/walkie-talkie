@@ -1815,6 +1815,7 @@ export default function MinecraftView({
 
         // Terminal blocks require confirmation before breaking
         if (blockType === 'terminal' && terminalId) {
+          pendingBreakRef.current = true;
           document.exitPointerLock();
           setPendingBreak({ blockPos: blockPos.clone(), terminalId });
           return;
@@ -1852,6 +1853,7 @@ export default function MinecraftView({
 
         // If clicking a terminal block, open it
         if (blockType === 'terminal' && terminalId) {
+          popupTerminalIdRef.current = terminalId;
           document.exitPointerLock();
           setPopupTerminalId(terminalId);
           setActiveTerminalId(terminalId);
@@ -1903,6 +1905,7 @@ export default function MinecraftView({
         // If placing a terminal block, show terminal picker
         if (selectedBlock === 'terminal') {
           const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
+          pendingPlaceRef.current = true;
           document.exitPointerLock();
           setPendingPlace({ placePos: placePos.clone(), rotation: snapped });
         }
@@ -2265,6 +2268,7 @@ export default function MinecraftView({
           const pos = pendingPlacementRef.current;
           terminalPositionsRef.current.set(t.id, pos.clone());
           posToTerminalRef.current.set(posKey(pos.x, pos.y, pos.z), t.id);
+          meshDirtyRef.current = true;
           pendingPlacementRef.current = null;
         } else {
           // Auto-place near center
