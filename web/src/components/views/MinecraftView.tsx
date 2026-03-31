@@ -1681,7 +1681,7 @@ export default function MinecraftView({
       if (locked) {
         setHasStarted(true);
         setSettingsOpen(false);
-      } else if (!inventoryOpenRef.current && !popupTerminalIdRef.current && !pendingBreakRef.current) {
+      } else if (!inventoryOpenRef.current && !popupTerminalIdRef.current && !pendingBreakRef.current && !pendingPlaceRef.current) {
         // Pointer lock lost (ESC) — show settings if nothing else is open
         setSettingsOpen(true);
       }
@@ -1689,7 +1689,7 @@ export default function MinecraftView({
     document.addEventListener('pointerlockchange', onPointerLockChange);
 
     const requestLock = () => {
-      if (document.pointerLockElement !== canvas && !settingsOpenRef.current && !inventoryOpenRef.current) {
+      if (document.pointerLockElement !== canvas && !settingsOpenRef.current && !inventoryOpenRef.current && !pendingPlaceRef.current && !pendingBreakRef.current && !popupTerminalIdRef.current) {
         canvas.requestPointerLock();
       }
     };
