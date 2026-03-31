@@ -78,7 +78,11 @@ export default function TerminalPopup({
     term.onData((data) => onInput(data));
 
     const unregister = registerOutput((data: string) => {
-      term.write(data);
+      const buf = term.buffer.active;
+      const atBottom = buf.viewportY >= buf.baseY;
+      term.write(data, () => {
+        if (atBottom) term.scrollToBottom();
+      });
     });
 
     const observer = new ResizeObserver(() => {
@@ -110,12 +114,13 @@ export default function TerminalPopup({
     }
   }, [termTheme]);
 
-  // Re-fit and focus when becoming visible
+  // Re-fit, focus, and scroll to bottom when becoming visible
   useEffect(() => {
     if (visible && termRef.current && fitAddonRef.current) {
       requestAnimationFrame(() => {
         fitAddonRef.current?.fit();
         termRef.current?.focus();
+        termRef.current?.scrollToBottom();
       });
     }
   }, [visible]);

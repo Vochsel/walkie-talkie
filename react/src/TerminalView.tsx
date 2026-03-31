@@ -143,7 +143,12 @@ export function TerminalView({
     });
 
     const unregister = registerOutput((data: string) => {
-      term.write(data);
+      // Check if viewport is at the bottom before writing
+      const buf = term.buffer.active;
+      const atBottom = buf.viewportY >= buf.baseY;
+      term.write(data, () => {
+        if (atBottom) term.scrollToBottom();
+      });
     });
 
     const observer = new ResizeObserver(() => {
@@ -176,6 +181,7 @@ export function TerminalView({
     if (isActive && termRef.current) {
       termRef.current.focus();
       fitAddonRef.current?.fit();
+      termRef.current.scrollToBottom();
     }
   }, [isActive]);
 
