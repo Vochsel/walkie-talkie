@@ -87,7 +87,7 @@ export interface TerminalViewProps {
   theme?: TerminalTheme;
   /** When the terminal is inside a CSS-transformed container (e.g. whiteboard
    *  zoom), pass the ancestor scale factor so xterm's mouse coordinate mapping
-   *  stays accurate. A counter-transform is applied internally. */
+   *  stays accurate. Mouse events are intercepted and adjusted internally. */
   containerScale?: number;
 }
 
@@ -107,6 +107,8 @@ export function TerminalView({
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const scaleRef = useRef(containerScale);
+  scaleRef.current = containerScale;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -196,24 +198,60 @@ export function TerminalView({
     }
   }, [isActive]);
 
-  const scaled = containerScale !== 1;
+  // When inside a CSS-scaled container, intercept mouse events and adjust
+  // coordinates so xterm's cell-based hit-testing stays accurate.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const adjusted = new WeakSet<Event>();
+
+    const handler = (e: MouseEvent) => {
+      const scale = scaleRef.current;
+      if (scale === 1 || adjusted.has(e)) return;
+
+      const rect = el.getBoundingClientRect();
+      const localX = (e.clientX - rect.left) / scale;
+      const localY = (e.clientY - rect.top) / scale;
+
+      e.stopImmediatePropagation();
+
+      const fixedEvent = new MouseEvent(e.type, {
+        bubbles: e.bubbles,
+        cancelable: e.cancelable,
+        view: e.view,
+        detail: e.detail,
+        screenX: e.screenX,
+        screenY: e.screenY,
+        clientX: rect.left + localX,
+        clientY: rect.top + localY,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+        button: e.button,
+        buttons: e.buttons,
+        relatedTarget: e.relatedTarget,
+      });
+      adjusted.add(fixedEvent);
+      (e.target as Element).dispatchEvent(fixedEvent);
+    };
+
+    const types = ['mousedown', 'mousemove', 'mouseup', 'click', 'dblclick'];
+    for (const t of types) el.addEventListener(t, handler as EventListener, true);
+    return () => {
+      for (const t of types) el.removeEventListener(t, handler as EventListener, true);
+    };
+  }, []);
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      overflow: 'hidden',
-      display: isActive ? 'block' : 'none',
-    }}>
-      <div
-        ref={containerRef}
-        style={{
-          width: scaled ? `${containerScale * 100}%` : '100%',
-          height: scaled ? `${containerScale * 100}%` : '100%',
-          transform: scaled ? `scale(${1 / containerScale})` : undefined,
-          transformOrigin: '0 0',
-        }}
-      />
-    </div>
+    <div
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: isActive ? 'block' : 'none',
+      }}
+    />
   );
 }
