@@ -1349,6 +1349,8 @@ export default function MinecraftView({
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
   const [pendingBreak, setPendingBreak] = useState<{ blockPos: THREE.Vector3; terminalId: string } | null>(null);
   const pendingBreakRef = useRef(false);
+  const [pendingPlace, setPendingPlace] = useState<{ placePos: THREE.Vector3; rotation: number } | null>(null);
+  const pendingPlaceRef = useRef(false);
   const [isLocked, setIsLocked] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [selectedSlot, setSelectedSlot] = usePersistedState('mc:hotbar', 0);
@@ -1426,6 +1428,7 @@ export default function MinecraftView({
   useEffect(() => { settingsOpenRef.current = settingsOpen; }, [settingsOpen]);
   useEffect(() => { popupTerminalIdRef.current = popupTerminalId; }, [popupTerminalId]);
   useEffect(() => { pendingBreakRef.current = pendingBreak !== null; }, [pendingBreak]);
+  useEffect(() => { pendingPlaceRef.current = pendingPlace !== null; }, [pendingPlace]);
 
   const rebuildMeshes = useCallback(() => {
     const s = sceneObjsRef.current;
@@ -1897,13 +1900,11 @@ export default function MinecraftView({
           terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), yaw);
         }
 
-        // If placing a terminal block, create a terminal facing the player
+        // If placing a terminal block, show terminal picker
         if (selectedBlock === 'terminal') {
-          pendingPlacementRef.current = placePos.clone();
-          // Snap to nearest 90° facing the player
           const snapped = Math.round(yawRef.current / (Math.PI / 2)) * (Math.PI / 2);
-          terminalRotationsRef.current.set(posKey(placePos.x, placePos.y, placePos.z), snapped);
-          createTerminal(80, 24);
+          document.exitPointerLock();
+          setPendingPlace({ placePos: placePos.clone(), rotation: snapped });
         }
       }
     };
@@ -2345,15 +2346,137 @@ export default function MinecraftView({
         </div>
       )}
 
+      {/* Terminal placement picker */}
+      {pendingPlace && (
+        <div style={styles.inventoryOverlay} onClick={() => {
+          // Cancel — remove the placed block
+          const { placePos } = pendingPlace;
+          worldRef.current?.userDelete(placePos.x, placePos.y, placePos.z);
+          meshDirtyRef.current = true;
+          if (worldRef.current) saveState('mc:worldDiff', worldRef.current.exportDiff());
+          setPendingPlace(null);
+          sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+        }}>
+          <div style={{ ...styles.inventoryPanel, maxWidth: 360, gap: 12 }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace", margin: 0 }}>
+              Place Terminal
+            </h3>
+            <p style={{ fontSize: 12, color: '#999', fontFamily: "'SF Mono', monospace", margin: 0 }}>
+              Pick an existing terminal or create a new one
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
+              {/* Existing terminals not already placed as blocks */}
+              {terminals
+                .filter((t) => !terminalPositionsRef.current.has(t.id))
+                .map((t, idx) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      const { placePos, rotation } = pendingPlace;
+                      const key = posKey(placePos.x, placePos.y, placePos.z);
+                      terminalPositionsRef.current.set(t.id, placePos.clone());
+                      posToTerminalRef.current.set(key, t.id);
+                      terminalRotationsRef.current.set(key, rotation);
+                      if (termScreensEnabled && !termScreensRef.current.has(t.id)) {
+                        termScreensRef.current.set(t.id, createTermScreen());
+                      }
+                      meshDirtyRef.current = true;
+                      syncTerminalMaps();
+                      if (worldRef.current) saveState('mc:worldDiff', worldRef.current.exportDiff());
+                      setPendingPlace(null);
+                      sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 12px', borderRadius: 4,
+                      border: '1px solid rgba(100,100,100,0.4)',
+                      background: 'rgba(50,50,50,0.6)', color: '#ccc', cursor: 'pointer',
+                      fontFamily: "'SF Mono', monospace", fontSize: 13, textAlign: 'left' as const,
+                    }}
+                  >
+                    <span style={{ color: '#00d4aa', fontSize: 11 }}>&#9632;</span>
+                    <span style={{ flex: 1 }}>{t.name || `${t.shell.split('/').pop()} #${idx + 1}`}</span>
+                    <span style={{ fontSize: 11, color: '#666' }}>PID {t.pid}</span>
+                  </button>
+                ))}
+              {/* Terminals already placed */}
+              {terminals
+                .filter((t) => terminalPositionsRef.current.has(t.id))
+                .map((t, idx) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      const { placePos, rotation } = pendingPlace;
+                      // Remove old block position
+                      const oldPos = terminalPositionsRef.current.get(t.id);
+                      if (oldPos) {
+                        const oldKey = posKey(oldPos.x, oldPos.y, oldPos.z);
+                        worldRef.current?.userDelete(oldPos.x, oldPos.y, oldPos.z);
+                        posToTerminalRef.current.delete(oldKey);
+                        terminalRotationsRef.current.delete(oldKey);
+                      }
+                      // Set new position
+                      const key = posKey(placePos.x, placePos.y, placePos.z);
+                      terminalPositionsRef.current.set(t.id, placePos.clone());
+                      posToTerminalRef.current.set(key, t.id);
+                      terminalRotationsRef.current.set(key, rotation);
+                      meshDirtyRef.current = true;
+                      syncTerminalMaps();
+                      if (worldRef.current) saveState('mc:worldDiff', worldRef.current.exportDiff());
+                      setPendingPlace(null);
+                      sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 12px', borderRadius: 4,
+                      border: '1px solid rgba(100,100,100,0.3)',
+                      background: 'rgba(40,40,40,0.5)', color: '#888', cursor: 'pointer',
+                      fontFamily: "'SF Mono', monospace", fontSize: 13, textAlign: 'left' as const,
+                    }}
+                  >
+                    <span style={{ color: '#666', fontSize: 11 }}>&#9632;</span>
+                    <span style={{ flex: 1 }}>{t.name || `${t.shell.split('/').pop()} #${idx + 1}`}</span>
+                    <span style={{ fontSize: 10, color: '#555' }}>move</span>
+                  </button>
+                ))}
+            </div>
+            <div style={{ borderTop: '1px solid rgba(100,100,100,0.3)', paddingTop: 8, marginTop: 4 }}>
+              <button
+                onClick={() => {
+                  const { placePos, rotation } = pendingPlace;
+                  const key = posKey(placePos.x, placePos.y, placePos.z);
+                  pendingPlacementRef.current = placePos.clone();
+                  terminalRotationsRef.current.set(key, rotation);
+                  createTerminal(80, 24);
+                  setPendingPlace(null);
+                  sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                }}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 4,
+                  border: '1px solid rgba(0,212,170,0.4)',
+                  background: 'rgba(0,212,170,0.15)', color: '#00d4aa', cursor: 'pointer',
+                  fontFamily: "'SF Mono', monospace", fontSize: 13, fontWeight: 600,
+                }}
+              >
+                + New Terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Terminal break confirmation */}
       {pendingBreak && (
-        <div style={styles.inventoryOverlay} onClick={() => setPendingBreak(null)}>
+        <div style={styles.inventoryOverlay} onClick={() => {
+          setPendingBreak(null);
+          sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+        }}>
           <div style={{ ...styles.inventoryPanel, maxWidth: 360, gap: 16, textAlign: 'center' as const }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#ddd', fontFamily: "'SF Mono', monospace" }}>
-              Destroy terminal?
+              Break terminal block?
             </h3>
             <p style={{ fontSize: 13, color: '#999', fontFamily: "'SF Mono', monospace", lineHeight: 1.5 }}>
-              This will kill the terminal session. This action cannot be undone.
+              Unlink removes the block but keeps the terminal session alive. Destroy kills the session.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
               <button
@@ -2368,6 +2491,28 @@ export default function MinecraftView({
                 }}
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { blockPos, terminalId } = pendingBreak;
+                  const key = posKey(blockPos.x, blockPos.y, blockPos.z);
+                  posToTerminalRef.current.delete(key);
+                  terminalRotationsRef.current.delete(key);
+                  terminalPositionsRef.current.delete(terminalId);
+                  syncTerminalMaps();
+                  worldRef.current?.userDelete(blockPos.x, blockPos.y, blockPos.z);
+                  meshDirtyRef.current = true;
+                  if (worldRef.current) saveState('mc:worldDiff', worldRef.current.exportDiff());
+                  setPendingBreak(null);
+                  sceneObjsRef.current?.renderer.domElement.requestPointerLock();
+                }}
+                style={{
+                  padding: '8px 20px', borderRadius: 4, border: '1px solid rgba(0,212,170,0.5)',
+                  background: 'rgba(0,212,170,0.15)', color: '#00d4aa', cursor: 'pointer',
+                  fontFamily: "'SF Mono', monospace", fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Unlink
               </button>
               <button
                 onClick={() => {
