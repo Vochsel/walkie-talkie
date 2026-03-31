@@ -1032,7 +1032,7 @@ function createGlassPaneModel(position: THREE.Vector3, texture: THREE.Texture, y
 
   const paneMat = new THREE.MeshLambertMaterial({
     map: texture, transparent: true, opacity: 0.75,
-    alphaTest: 0.01, side: THREE.DoubleSide,
+    alphaTest: 0.01, side: THREE.FrontSide,
   });
   const pane = new THREE.Mesh(paneGeo, paneMat);
   pane.castShadow = false;
