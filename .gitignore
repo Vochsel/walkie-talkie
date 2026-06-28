@@ -17,3 +17,10 @@ release/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local tooling
+.claude/
+skills-lock.json
+
+# walkie-talkie dev-run session state (the feature's own output)
+.walkie-talkie/

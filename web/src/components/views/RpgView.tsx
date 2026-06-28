@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
+import FileBrowser from '@/components/FileBrowser';
 import { usePersistedRef } from '@/hooks/usePersistedState';
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -118,7 +119,9 @@ interface Station { tileX: number; tileY: number; }
 export default function RpgView({
   terminals, activeTerminalId, setActiveTerminalId,
   sendInput, resizeTerminal, killTerminal, renameTerminal, createTerminal, registerOutputHandler,
+  serverUrl, sessionId,
 }: ViewProps) {
+  const [showFiles, setShowFiles] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<TileType[][] | null>(null);
@@ -612,6 +615,28 @@ export default function RpgView({
   return (
     <div ref={containerRef} style={styles.container}>
       <canvas ref={canvasRef} style={styles.canvas} onClick={handleCanvasClick} />
+
+      <button
+        style={{ ...styles.filesBtn, ...(showFiles ? styles.filesBtnActive : {}) }}
+        onClick={(e) => { e.stopPropagation(); setShowFiles((v) => !v); }}
+        title="Browse files (read-only)"
+      >
+        {'\u{1F4DC}'} Files
+      </button>
+
+      {showFiles && (
+        <div style={styles.filesOverlay} onClick={() => setShowFiles(false)}>
+          <div style={styles.filesWindow} onClick={(e) => e.stopPropagation()}>
+            <FileBrowser
+              serverUrl={serverUrl}
+              sessionId={sessionId}
+              onClose={() => setShowFiles(false)}
+              style={{ width: '100%', height: '100%', borderRadius: 12 }}
+            />
+          </div>
+        </div>
+      )}
+
       {terminals.map((t) => (
         <TerminalPopup
           key={t.id}
@@ -632,4 +657,17 @@ export default function RpgView({
 const styles: Record<string, React.CSSProperties> = {
   container: { width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#1a1a2e' },
   canvas: { display: 'block', width: '100%', height: '100%', imageRendering: 'pixelated', cursor: 'crosshair' },
+  filesBtn: {
+    position: 'absolute', top: 12, left: 12, zIndex: 50,
+    display: 'flex', alignItems: 'center', gap: 6,
+    background: 'rgba(26,26,46,0.9)', border: '2px solid #00d4aa', color: '#00d4aa',
+    borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    fontFamily: 'monospace', boxShadow: '0 2px 12px rgba(0,212,170,0.3)',
+  },
+  filesBtnActive: { background: '#00d4aa', color: '#1a1a2e' },
+  filesOverlay: {
+    position: 'absolute', inset: 0, zIndex: 60,
+    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  filesWindow: { width: 'min(820px, 100%)', height: 'min(80%, 640px)' },
 };

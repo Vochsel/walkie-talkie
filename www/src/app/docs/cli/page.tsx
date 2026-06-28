@@ -64,6 +64,11 @@ walkie-talkie`}
             <td><code>false</code></td>
           </tr>
           <tr>
+            <td><code>--no-history</code></td>
+            <td>Don&apos;t capture recent commands to <code>state.yaml</code></td>
+            <td><code>false</code></td>
+          </tr>
+          <tr>
             <td><code>-h, --help</code></td>
             <td>Show help message</td>
             <td>-</td>
@@ -100,6 +105,39 @@ walkie-talkie -d ~/projects/my-app --open`}
         <li>The raw token value for manual entry</li>
         <li>Server address and port</li>
       </ul>
+
+      <h2 id="session-state">Session State</h2>
+      <p>
+        While the server runs, your open terminals — names, working directory and recent
+        commands — are saved to <code>.walkie-talkie/state.yaml</code> in the working
+        directory. Commit it to git: reconnecting to the repo later shows a
+        &quot;Welcome back&quot; panel that lists your previous tabs and lets you reopen them.
+      </p>
+      <Code
+        lang="yaml"
+        title=".walkie-talkie/state.yaml"
+        code={`version: 1
+terminals:
+  - name: dev server
+    shell: /bin/zsh
+    cwd: ./web
+    recentCommands:
+      - pnpm dev
+      - git status`}
+      />
+      <p>
+        Recent commands are captured heuristically and run through best-effort secret
+        redaction (env-var assignments, <code>--token</code>/<code>--password</code> flags
+        and URL credentials are masked). Review before committing, or pass{' '}
+        <code>--no-history</code> to disable capture.
+      </p>
+
+      <h2 id="file-browsing">File Browsing</h2>
+      <p>
+        The web UI can browse and view files in the working directory, read-only and jailed
+        to that directory (path traversal and symlink escapes are rejected). Served by{' '}
+        <code>GET /api/fs/list</code> and <code>GET /api/fs/read</code> with Bearer auth.
+      </p>
 
       <h2 id="token-refresh">Token Refresh</h2>
       <p>

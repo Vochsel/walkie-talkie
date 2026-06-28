@@ -54,7 +54,7 @@ server.onStateChange(() => {
       />
 
       <h2 id="api">API</h2>
-      <h3>createServer(port?, cwd?)</h3>
+      <h3>createServer(port?, cwd?, options?)</h3>
       <p>Creates and returns a server instance.</p>
       <div className="docs-params">
         <div className="docs-param">
@@ -65,7 +65,19 @@ server.onStateChange(() => {
         <div className="docs-param">
           <span className="docs-param-name">cwd</span>
           <span className="docs-param-type">string?</span>
-          <span className="docs-param-desc">Working directory for spawned terminals. Default: user home.</span>
+          <span className="docs-param-desc">
+            Working directory for spawned terminals. When set, enables git-committable
+            session persistence (<code>.walkie-talkie/state.yaml</code>) and read-only
+            file browsing jailed to this directory. Default: user home.
+          </span>
+        </div>
+        <div className="docs-param">
+          <span className="docs-param-name">options</span>
+          <span className="docs-param-type">{'{ history?: boolean }'}</span>
+          <span className="docs-param-desc">
+            <code>history</code> (default <code>true</code>) captures redacted recent
+            commands to the state file; set <code>false</code> to disable.
+          </span>
         </div>
       </div>
 
@@ -153,8 +165,28 @@ server.onStateChange(() => {
             <td>Bearer</td>
             <td>Kill a terminal by ID</td>
           </tr>
+          <tr>
+            <td><code>GET /api/fs/root</code></td>
+            <td>Bearer</td>
+            <td>Project root path + name (read-only browsing)</td>
+          </tr>
+          <tr>
+            <td><code>GET /api/fs/list?path=</code></td>
+            <td>Bearer</td>
+            <td>List a directory (jailed to the start dir)</td>
+          </tr>
+          <tr>
+            <td><code>GET /api/fs/read?path=</code></td>
+            <td>Bearer</td>
+            <td>Read a file (text / image / binary), 1MB cap</td>
+          </tr>
         </tbody>
       </table>
+      <p>
+        File endpoints are <strong>read-only</strong> and jailed to the directory the
+        server was started in — path traversal and symlink escapes return <code>403</code>.
+        They are disabled (<code>404</code>) when no working directory is set.
+      </p>
       <p>
         Authenticated endpoints require <code>Authorization: Bearer &lt;sessionId&gt;</code>.
       </p>

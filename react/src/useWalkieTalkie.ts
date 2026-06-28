@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { TerminalInfo, ServerMessage } from '@walkie-talkie/shared';
+import type { TerminalInfo, ServerMessage, SavedTerminal } from '@walkie-talkie/shared';
 import {
   WalkieTalkieClient,
   ConnectionState,
@@ -9,12 +9,21 @@ import {
 
 export type TerminalOutputHandler = (terminalId: string, data: string) => void;
 
+export interface RestoreSnapshot {
+  root: string;
+  repoName: string;
+  terminals: SavedTerminal[];
+}
+
 export function useWalkieTalkie() {
   const clientRef = useRef<WalkieTalkieClient | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [isResuming, setIsResuming] = useState(false);
   const [errorReason, setErrorReason] = useState<string | null>(null);
+  const [restore, setRestore] = useState<RestoreSnapshot | null>(null);
+  const [serverUrl, setServerUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const outputHandlersRef = useRef<Map<string, (data: string) => void>>(new Map());
   const outputBuffersRef = useRef<Map<string, string>>(new Map());
 
@@ -39,15 +48,20 @@ export function useWalkieTalkie() {
       }
 
       if (state === 'connected') {
-        const sessionId = client.getSessionId();
-        const serverUrl = client.getServerUrl();
-        if (sessionId && serverUrl) {
+        const sid = client.getSessionId();
+        const url = client.getServerUrl();
+        setSessionId(sid);
+        setServerUrl(url || null);
+        if (sid && url) {
           saveConnection({
-            serverUrl,
-            sessionId,
+            serverUrl: url,
+            sessionId: sid,
             connectedAt: Date.now(),
           });
         }
+      } else if (state === 'disconnected') {
+        setSessionId(null);
+        setServerUrl(null);
       }
     });
 
@@ -81,6 +95,9 @@ export function useWalkieTalkie() {
           setTerminals(msg.terminals);
           setIsResuming(false);
           break;
+        case 'session:restore':
+          setRestore({ root: msg.root, repoName: msg.repoName, terminals: msg.terminals });
+          break;
       }
     });
 
@@ -100,17 +117,21 @@ export function useWalkieTalkie() {
   }, []);
 
   const disconnect = useCallback(() => {
-    const serverUrl = clientRef.current?.getServerUrl();
+    const url = clientRef.current?.getServerUrl();
     clientRef.current?.disconnect();
     setTerminals([]);
+    setRestore(null);
     outputHandlersRef.current.clear();
     outputBuffersRef.current.clear();
-    if (serverUrl) removeConnection(serverUrl);
+    if (url) removeConnection(url);
   }, []);
 
-  const createTerminal = useCallback((cols: number, rows: number) => {
-    clientRef.current?.send({ type: 'terminal:create', cols, rows });
-  }, []);
+  const createTerminal = useCallback(
+    (cols: number, rows: number, opts?: { name?: string; cwd?: string }) => {
+      clientRef.current?.send({ type: 'terminal:create', cols, rows, ...opts });
+    },
+    []
+  );
 
   const sendInput = useCallback((terminalId: string, data: string) => {
     clientRef.current?.send({ type: 'terminal:input', terminalId, data });
@@ -149,6 +170,9 @@ export function useWalkieTalkie() {
     terminals,
     isResuming,
     errorReason,
+    restore,
+    serverUrl,
+    sessionId,
     connect,
     resumeSession,
     disconnect,

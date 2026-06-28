@@ -1,6 +1,6 @@
 // Hooks
 export { useWalkieTalkie } from './useWalkieTalkie';
-export type { TerminalOutputHandler } from './useWalkieTalkie';
+export type { TerminalOutputHandler, RestoreSnapshot } from './useWalkieTalkie';
 export { usePersistedState, usePersistedRef } from './usePersistedState';
 
 // Components

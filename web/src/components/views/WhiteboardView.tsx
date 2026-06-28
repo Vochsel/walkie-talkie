@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import type { TerminalInfo } from '@walkie-talkie/shared';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
+import FileBrowser from '@/components/FileBrowser';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -36,7 +37,11 @@ export default function WhiteboardView({
   renameTerminal,
   createTerminal,
   registerOutputHandler,
+  serverUrl,
+  sessionId,
 }: ViewProps) {
+  const [showFiles, setShowFiles] = useState(false);
+  const [filesBtnHovered, setFilesBtnHovered] = useState(false);
   // Persist layouts as a plain object (Maps don't serialize)
   const [layoutsObj, setLayoutsObj] = usePersistedState<Record<string, NodeLayout>>('whiteboard:layouts', {});
   const nodeLayouts = new Map(Object.entries(layoutsObj));
@@ -728,6 +733,23 @@ export default function WhiteboardView({
       {/* Floating toolbar */}
       <div style={canvasStyles.toolbar}>
         <button
+          onClick={() => setShowFiles((v) => !v)}
+          onMouseEnter={() => setFilesBtnHovered(true)}
+          onMouseLeave={() => setFilesBtnHovered(false)}
+          style={{
+            ...canvasStyles.toolbarButton,
+            background: showFiles || filesBtnHovered ? 'var(--accent)' : 'var(--bg-tertiary)',
+            color: showFiles || filesBtnHovered ? 'var(--bg-primary)' : 'var(--accent)',
+            borderColor: showFiles || filesBtnHovered ? 'var(--accent)' : 'var(--border)',
+            transform: filesBtnHovered ? 'scale(1.05)' : 'scale(1)',
+          }}
+          title="Browse files (read-only)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h5.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1Z" />
+          </svg>
+        </button>
+        <button
           onClick={autoLayout}
           onMouseEnter={() => setLayoutBtnHovered(true)}
           onMouseLeave={() => setLayoutBtnHovered(false)}
@@ -794,6 +816,24 @@ export default function WhiteboardView({
           </svg>
         </button>
       </div>
+
+      {/* Floating read-only file browser */}
+      {showFiles && (
+        <FileBrowser
+          serverUrl={serverUrl}
+          sessionId={sessionId}
+          onClose={() => setShowFiles(false)}
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            width: 'min(420px, 90%)',
+            height: 'min(70%, 600px)',
+            zIndex: 100,
+            boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+          }}
+        />
+      )}
 
       {/* React Flow-style controls panel */}
       <div style={canvasStyles.controlsPanel}>

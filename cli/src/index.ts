@@ -1,7 +1,8 @@
 import { createServer, generateQR } from './server';
 import { DEFAULT_PORT } from '@walkie-talkie/shared';
 import { createConnection } from 'net';
-import { networkInterfaces } from 'os';
+import { networkInterfaces, homedir } from 'os';
+import { join, resolve } from 'path';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -20,6 +21,7 @@ function parseArgs() {
   let force = false;
   let open = false;
   let dir = process.cwd();
+  let history = true;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -27,29 +29,38 @@ function parseArgs() {
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
-      console.log('1.0.2');
+      console.log('1.1.0');
       process.exit(0);
     } else if (arg.startsWith('--port=')) {
       port = parseInt(arg.split('=')[1]);
-    } else if ((arg === '-p') && i + 1 < args.length) {
+    } else if ((arg === '-p' || arg === '--port') && i + 1 < args.length) {
       port = parseInt(args[++i]);
     } else if (arg === '--force' || arg === '-f') {
       force = true;
     } else if (arg === '--open' || arg === '-o') {
       open = true;
     } else if (arg.startsWith('--dir=')) {
-      dir = arg.split('=')[1];
-    } else if ((arg === '-d') && i + 1 < args.length) {
+      dir = arg.slice('--dir='.length);
+    } else if ((arg === '-d' || arg === '--dir') && i + 1 < args.length) {
       dir = args[++i];
+    } else if (arg === '--no-history') {
+      history = false;
     }
   }
 
-  return { port, force, open, dir };
+  // Expand a leading ~ (some shells don't expand it after `=`) and make absolute
+  // so the working dir, state file, and file jail are unambiguous.
+  if (dir === '~' || dir.startsWith('~/')) {
+    dir = join(homedir(), dir.slice(1));
+  }
+  dir = resolve(dir);
+
+  return { port, force, open, dir, history };
 }
 
 function printHelp() {
   console.log(`
-  ${CYAN}${BOLD}walkie-talkie${RESET} ${DIM}v1.0.2${RESET}
+  ${CYAN}${BOLD}walkie-talkie${RESET} ${DIM}v1.1.0${RESET}
   ${DIM}Remote terminal access from your browser${RESET}
 
   ${BOLD}USAGE${RESET}
@@ -60,14 +71,21 @@ function printHelp() {
     ${WHITE}-d, --dir=<path>${RESET}    ${DIM}Working directory for terminals (default: cwd)${RESET}
     ${WHITE}-f, --force${RESET}          ${DIM}Kill existing process on the port${RESET}
     ${WHITE}-o, --open${RESET}           ${DIM}Open browser automatically${RESET}
+    ${WHITE}--no-history${RESET}         ${DIM}Don't capture recent commands to state.yaml${RESET}
     ${WHITE}-h, --help${RESET}           ${DIM}Show this help message${RESET}
     ${WHITE}-v, --version${RESET}        ${DIM}Show version number${RESET}
+
+  ${BOLD}SESSION STATE${RESET}
+    ${DIM}Terminal tabs, names and recent commands are saved to${RESET}
+    ${WHITE}.walkie-talkie/state.yaml${RESET} ${DIM}in the working directory — commit it to${RESET}
+    ${DIM}git to restore your tabs when you return. Files in the working${RESET}
+    ${DIM}directory are browsable read-only from the web UI.${RESET}
 `);
 }
 
 function banner() {
   console.log('');
-  console.log(`  ${CYAN}${BOLD}walkie-talkie${RESET}  ${DIM}v1.0.2${RESET}`);
+  console.log(`  ${CYAN}${BOLD}walkie-talkie${RESET}  ${DIM}v1.1.0${RESET}`);
   console.log(`  ${DIM}Remote terminal access from your browser${RESET}`);
   console.log('');
 }
@@ -112,7 +130,7 @@ function killPort(port: number): Promise<void> {
 }
 
 async function main() {
-  const { port, force, open, dir } = parseArgs();
+  const { port, force, open, dir, history } = parseArgs();
 
   banner();
 
@@ -129,7 +147,7 @@ async function main() {
     }
   }
 
-  const server = createServer(port, dir);
+  const server = createServer(port, dir, { history });
   await server.start();
 
   const token = server.generateToken();
@@ -142,6 +160,8 @@ async function main() {
   console.log(`  ${DIM}Local:${RESET}   ${WHITE}${localUrl}${RESET}`);
   console.log(`  ${DIM}Network:${RESET} ${WHITE}${networkUrl}${RESET}`);
   console.log(`  ${DIM}Token:${RESET}   ${CYAN}${BOLD}${token.value}${RESET}`);
+  console.log(`  ${DIM}State:${RESET}   ${WHITE}${join(dir, '.walkie-talkie', 'state.yaml')}${RESET}${history ? '' : ` ${DIM}(history off)${RESET}`}`);
+  console.log(`  ${DIM}Files:${RESET}   ${WHITE}read-only browsing of ${dir}${RESET}`);
   console.log('');
 
   // QR code points to demo site

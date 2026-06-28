@@ -8,6 +8,7 @@ import { useWalkieTalkie } from '@/hooks/useWalkieTalkie';
 import ConnectScreen from '@/components/ConnectScreen';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import ViewSwitcher, { ViewType } from '@/components/ViewSwitcher';
+import RestorePanel from '@/components/RestorePanel';
 import { getSavedConnections } from '@/lib/storage';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useTheme } from '@/hooks/useTheme';
@@ -28,6 +29,8 @@ export interface ViewProps {
   renameTerminal: ReturnType<typeof useWalkieTalkie>['renameTerminal'];
   createTerminal: ReturnType<typeof useWalkieTalkie>['createTerminal'];
   registerOutputHandler: ReturnType<typeof useWalkieTalkie>['registerOutputHandler'];
+  serverUrl: string | null;
+  sessionId: string | null;
 }
 
 function AppContent() {
@@ -37,6 +40,9 @@ function AppContent() {
     terminals,
     isResuming,
     errorReason,
+    restore,
+    serverUrl,
+    sessionId,
     connect,
     resumeSession,
     disconnect,
@@ -50,7 +56,13 @@ function AppContent() {
 
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [restoreDismissed, setRestoreDismissed] = useState(false);
   const [currentView, setCurrentView] = usePersistedState<ViewType>('view', 'classic');
+
+  // A previous session exists on disk and hasn't been dealt with yet.
+  const restorable = !!restore && restore.terminals.length > 0 && !restoreDismissed;
+  const showRestore =
+    connectionState === 'connected' && restorable && !isResuming && terminals.length === 0;
   useTheme(); // Apply data-theme attribute globally so CSS variables work in all views
 
   const autoResumedRef = useRef(false);
@@ -88,13 +100,24 @@ function AppContent() {
     }
   }, [connectionState, searchParams]);
 
-  // When we fresh-connect (not resume), create a terminal.
-  // On resume, wait for the server to send terminal:list first.
+  // When we fresh-connect (not resume), create a terminal — unless a previous
+  // session is offered for restore, in which case wait for the user's choice.
   useEffect(() => {
-    if (connectionState === 'connected' && terminals.length === 0 && !isResuming) {
+    if (
+      connectionState === 'connected' &&
+      terminals.length === 0 &&
+      !isResuming &&
+      !restorable
+    ) {
       createTerminal(80, 24);
     }
-  }, [connectionState, terminals.length, createTerminal, isResuming]);
+  }, [connectionState, terminals.length, createTerminal, isResuming, restorable]);
+
+  // Reset the restore dismissal when the connection drops so a later
+  // reconnect to a repo can offer restore again.
+  useEffect(() => {
+    if (connectionState === 'disconnected') setRestoreDismissed(false);
+  }, [connectionState]);
 
   // Auto-select first terminal or maintain selection
   useEffect(() => {
@@ -167,6 +190,8 @@ function AppContent() {
     renameTerminal,
     createTerminal,
     registerOutputHandler,
+    serverUrl,
+    sessionId,
   };
 
   return (
@@ -182,6 +207,14 @@ function AppContent() {
       </div>
 
       <ConnectionStatus state={connectionState} onDisconnect={disconnect} />
+
+      {showRestore && restore && (
+        <RestorePanel
+          restore={restore}
+          onReopen={(t) => createTerminal(80, 24, { name: t.name, cwd: t.cwd })}
+          onDismiss={() => setRestoreDismissed(true)}
+        />
+      )}
     </div>
   );
 }

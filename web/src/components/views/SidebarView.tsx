@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { ViewProps } from '@/app/page';
 import TerminalView from '@/components/TerminalView';
+import FileBrowser from '@/components/FileBrowser';
 import { usePersistedState } from '@/hooks/usePersistedState';
 
 interface Group {
@@ -21,7 +22,10 @@ export default function SidebarView({
   renameTerminal,
   createTerminal,
   registerOutputHandler,
+  serverUrl,
+  sessionId,
 }: ViewProps) {
+  const [showFiles, setShowFiles] = useState(false);
   const [groups, setGroups] = usePersistedState<Group[]>('sidebar:groups', [
     { name: 'Default', terminalIds: [], collapsed: false },
   ]);
@@ -163,13 +167,25 @@ export default function SidebarView({
         {/* Sidebar header */}
         <div style={styles.sidebarHeader}>
           <span style={styles.sidebarTitle}>Terminals</span>
-          <button
-            style={styles.newTerminalBtn}
-            onClick={handleCreateTerminal}
-            title="New terminal"
-          >
-            +
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              style={{
+                ...styles.newTerminalBtn,
+                ...(showFiles ? { background: 'var(--accent)', color: 'var(--bg-primary)', borderColor: 'var(--accent)' } : {}),
+              }}
+              onClick={() => setShowFiles((v) => !v)}
+              title="Browse files (read-only)"
+            >
+              {'\u{1F4C1}'}
+            </button>
+            <button
+              style={styles.newTerminalBtn}
+              onClick={handleCreateTerminal}
+              title="New terminal"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         {/* Groups */}
@@ -354,6 +370,14 @@ export default function SidebarView({
               Create Terminal
             </button>
           </div>
+        )}
+        {showFiles && (
+          <FileBrowser
+            serverUrl={serverUrl}
+            sessionId={sessionId}
+            onClose={() => setShowFiles(false)}
+            style={{ position: 'absolute', inset: 0, borderRadius: 0, border: 'none', zIndex: 20 }}
+          />
         )}
       </div>
     </div>

@@ -9,6 +9,27 @@ export interface TerminalInfo {
   cwd: string;
   createdAt: number;
   name?: string;
+  /** Best-effort recent command history (redacted, newest last). */
+  recentCommands?: string[];
+  /** Epoch ms of the last captured command. */
+  lastActive?: number;
+}
+
+// === Persisted Session State (git-committable) ===
+
+/**
+ * A terminal as recorded in `.walkie-talkie/state.yaml`. Holds enough to
+ * show "what was I doing here" and to reopen a fresh shell in the same place.
+ * Deliberately excludes volatile fields (id/pid) to keep git diffs meaningful.
+ */
+export interface SavedTerminal {
+  name?: string;
+  shell: string;
+  /** Relative to the repo root when inside it, absolute otherwise. */
+  cwd: string;
+  createdAt: number;
+  lastActive: number;
+  recentCommands: string[];
 }
 
 // === Client -> Server Messages ===
@@ -41,6 +62,15 @@ export interface TerminalCreateMessage {
   cols: number;
   rows: number;
   shell?: string;
+  /** Optional name to apply immediately (used when reopening a saved terminal). */
+  name?: string;
+  /** Optional cwd (relative to repo root or absolute); jailed to the root server-side. */
+  cwd?: string;
+}
+
+/** Ask the server to (re)send the persisted restore snapshot. */
+export interface SessionRestoreRequestMessage {
+  type: 'session:restore';
 }
 
 export interface TerminalKillMessage {
@@ -66,7 +96,8 @@ export type ClientMessage =
   | TerminalCreateMessage
   | TerminalKillMessage
   | TerminalListMessage
-  | TerminalRenameMessage;
+  | TerminalRenameMessage
+  | SessionRestoreRequestMessage;
 
 // === Server -> Client Messages ===
 
@@ -114,6 +145,19 @@ export interface ErrorMessage {
   code?: string;
 }
 
+/**
+ * Persisted state from a previous run, sent right after auth. The client uses
+ * this to show a "Recent" panel offering to reopen previous terminals.
+ */
+export interface SessionRestoreMessage {
+  type: 'session:restore';
+  /** Absolute path of the directory the server was started in. */
+  root: string;
+  /** Basename of the root, for display. */
+  repoName: string;
+  terminals: SavedTerminal[];
+}
+
 export type ServerMessage =
   | AuthOkMessage
   | AuthFailMessage
@@ -122,4 +166,5 @@ export type ServerMessage =
   | TerminalExitedMessage
   | TerminalListResponseMessage
   | TerminalRenamedMessage
+  | SessionRestoreMessage
   | ErrorMessage;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import type { ViewProps } from '@/app/page';
 import TerminalPopup from '@/components/TerminalPopup';
+import FileBrowser from '@/components/FileBrowser';
 import { usePersistedRef, usePersistedState } from '@/hooks/usePersistedState';
 import { loadState, saveState } from '@/lib/storage';
 
@@ -1344,8 +1345,11 @@ export default function MinecraftView({
   renameTerminal,
   createTerminal,
   registerOutputHandler,
+  serverUrl,
+  sessionId,
 }: ViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
   const [popupTerminalId, setPopupTerminalId] = useState<string | null>(null);
   const [pendingBreak, setPendingBreak] = useState<{ blockPos: THREE.Vector3; terminalId: string } | null>(null);
   const pendingBreakRef = useRef(false);
@@ -2669,6 +2673,34 @@ export default function MinecraftView({
         </div>
       )}
 
+      {/* Files button — available when the cursor is free (start screen / unlocked) */}
+      {!isLocked && !inventoryOpen && !settingsOpen && !pendingPlace && !pendingBreak && !filesOpen && (
+        <button
+          style={styles.filesButton}
+          onClick={(e) => { e.stopPropagation(); setFilesOpen(true); }}
+          title="Browse files (read-only)"
+        >
+          {'\u{1F4E6}'} Files
+        </button>
+      )}
+
+      {/* Read-only file browser overlay */}
+      {filesOpen && (
+        <div style={styles.inventoryOverlay} onClick={() => setFilesOpen(false)}>
+          <div
+            style={{ width: 'min(820px, 92%)', height: 'min(80%, 640px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileBrowser
+              serverUrl={serverUrl}
+              sessionId={sessionId}
+              onClose={() => setFilesOpen(false)}
+              style={{ width: '100%', height: '100%', borderRadius: 8 }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Terminal popups — kept mounted so xterm state persists */}
       {terminals.map((t) => (
         <TerminalPopup
@@ -2795,6 +2827,13 @@ const styles: Record<string, React.CSSProperties> = {
   instructionsKeys: { display: 'flex', flexDirection: 'column' as const, gap: 6, fontSize: 13, color: '#c9d1d9', marginTop: 8 },
   hud: { position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10, pointerEvents: 'none' },
   hudText: { background: 'rgba(13,17,23,0.7)', color: '#8b949e', fontSize: 12, padding: '4px 14px', borderRadius: 6, fontFamily: "'SF Mono', monospace" },
+  filesButton: {
+    position: 'absolute', top: 12, left: 12, zIndex: 30,
+    display: 'flex', alignItems: 'center', gap: 6,
+    background: 'rgba(13,17,23,0.85)', color: '#e6edf3', border: '2px solid #4b5563',
+    borderRadius: 4, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+    fontFamily: "'SF Mono', monospace", boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+  },
   settingsPanel: {
     background: 'rgba(50,50,50,0.92)', border: '3px solid rgba(100,100,100,0.7)',
     borderRadius: 4, padding: '20px 28px', display: 'flex',

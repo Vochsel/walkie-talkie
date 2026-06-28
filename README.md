@@ -10,6 +10,46 @@ npx walkie-talkie
 
 That's it. Open the URL printed in your terminal. Connect with the token.
 
+## Session State (git-friendly)
+
+Walkie-talkie remembers your terminals per project. While the server runs it writes
+your open tabs — names, working directory, and recent commands — to:
+
+```
+<project>/.walkie-talkie/state.yaml
+```
+
+Commit this file to git. When you come back to the repo (even weeks later), connecting
+shows a **"Welcome back"** panel listing your previous tabs and the commands you ran in
+each, so you can reopen a fresh shell right where you left off.
+
+```yaml
+# walkie-talkie session state — safe to commit.
+version: 1
+updatedAt: 2026-06-28T10:30:00.000Z
+terminals:
+  - name: dev server
+    shell: /bin/zsh
+    cwd: ./web
+    createdAt: 2026-06-28T09:00:00.000Z
+    lastActive: 2026-06-28T10:29:00.000Z
+    recentCommands:
+      - pnpm dev
+      - git status
+```
+
+Recent commands are captured heuristically and run through **best-effort secret
+redaction** (env-var assignments, `--token`/`--password` flags and URL credentials are
+masked) since the file is meant to be committed. Review it before committing, or run with
+`--no-history` to disable command capture entirely.
+
+## Read-only File Browsing
+
+The web UI can browse and view files in the directory the server was started from,
+**read-only** and **jailed to that directory** (path traversal and symlink escapes are
+rejected). Every view has a **Files** affordance — a panel, sidebar section, or overlay
+depending on the view. Backed by `GET /api/fs/list` and `GET /api/fs/read` (Bearer auth).
+
 ## Packages
 
 | Package | Description | Install |
@@ -101,6 +141,8 @@ ws.onmessage = (e) => {
 - **Session tokens**: UUID issued on auth, tied to WebSocket connection
 - **Auth timeout**: 10s to authenticate or disconnected
 - **In-memory only**: Restart clears all tokens/sessions
+- **Session state on disk**: Tab names + recent commands persist to `.walkie-talkie/state.yaml` in the project dir (secret-redacted; `--no-history` to disable)
+- **File access**: Read-only and jailed to the start directory; no write/exec endpoints
 - **HTTPS**: Automatic via ngrok when tunneled
 
 ## Tech Stack

@@ -120,11 +120,15 @@ const ws = new WebSocket('ws://localhost:3456/ws');`}
   cols: number;      // Terminal width in columns
   rows: number;      // Terminal height in rows
   shell?: string;    // Optional: e.g. "/bin/zsh", "powershell.exe"
+  name?: string;     // Optional: apply a name (used when reopening a saved tab)
+  cwd?: string;      // Optional: working dir (jailed to the server's root)
 }`}
       />
       <div className="docs-note">
         If <code>shell</code> is omitted, the server uses <code>$SHELL</code> on Unix
-        or <code>powershell.exe</code> on Windows.
+        or <code>powershell.exe</code> on Windows. When reopening a terminal from a
+        restored session, pass <code>name</code> and <code>cwd</code> — the server seeds
+        the new terminal&apos;s recent-command history from the saved snapshot.
       </div>
 
       <h3 id="terminal-input">terminal:input</h3>
@@ -169,6 +173,18 @@ const ws = new WebSocket('ws://localhost:3456/ws');`}
 }`}
       />
 
+      <h3 id="session-restore-request">session:restore (request)</h3>
+      <p>
+        Ask the server to (re)send the persisted restore snapshot. The server also pushes
+        this automatically right after authentication.
+      </p>
+      <Code
+        lang="typescript"
+        code={`interface SessionRestoreRequestMessage {
+  type: 'session:restore';
+}`}
+      />
+
       <h2 id="server-messages">Server → Client</h2>
 
       <h3 id="auth-ok">auth:ok</h3>
@@ -204,13 +220,16 @@ const ws = new WebSocket('ws://localhost:3456/ws');`}
 }
 
 interface TerminalInfo {
-  id: string;         // UUID
-  pid: number;        // OS process ID
-  shell: string;      // e.g. "/bin/zsh"
+  id: string;          // UUID
+  pid: number;         // OS process ID
+  shell: string;       // e.g. "/bin/zsh"
   cols: number;
   rows: number;
-  cwd: string;        // Working directory
-  createdAt: number;  // Unix timestamp (ms)
+  cwd: string;         // Working directory
+  createdAt: number;   // Unix timestamp (ms)
+  name?: string;       // User-assigned tab name
+  recentCommands?: string[];  // Redacted, newest last
+  lastActive?: number; // Unix timestamp (ms) of last command
 }`}
       />
 
@@ -246,6 +265,30 @@ interface TerminalInfo {
         code={`interface TerminalListResponseMessage {
   type: 'terminal:list';
   terminals: TerminalInfo[];
+}`}
+      />
+
+      <h3 id="session-restore">session:restore</h3>
+      <p>
+        Persisted state from a previous run, pushed right after authentication (and on
+        request). The client uses it to offer reopening previous terminals.
+      </p>
+      <Code
+        lang="typescript"
+        code={`interface SessionRestoreMessage {
+  type: 'session:restore';
+  root: string;       // Absolute path of the server's start directory
+  repoName: string;   // Basename of root, for display
+  terminals: SavedTerminal[];
+}
+
+interface SavedTerminal {
+  name?: string;
+  shell: string;
+  cwd: string;             // Relative to root when inside it
+  createdAt: number;
+  lastActive: number;
+  recentCommands: string[]; // Redacted, newest last
 }`}
       />
 
